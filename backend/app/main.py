@@ -21,6 +21,9 @@ from backend.app.routers.anomalies import (
 from backend.app.routers.alerts import (
     router as alerts_router,
 )
+from backend.app.routers.dashboards import (
+    router as dashboards_router,
+)
 
 
 class HealthResponse(BaseModel):
@@ -56,6 +59,7 @@ app.include_router(support_requests_router)
 app.include_router(forecasts_router)
 app.include_router(anomalies_router)
 app.include_router(alerts_router)
+app.include_router(dashboards_router)
 
 @app.get(
     "/health",
