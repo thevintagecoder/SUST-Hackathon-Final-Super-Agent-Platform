@@ -7,6 +7,8 @@ from backend.app.models.provider_balance import ProviderBalance
 from backend.app.models.support_request import SupportRequest
 from backend.app.models.support_request_event import SupportRequestEvent
 from backend.app.models.transaction import Transaction
+from backend.app.models.alert import Alert
+from backend.app.models.alert_event import AlertEvent
 
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "SupportRequest",
     "SupportRequestEvent",
     "Transaction",
+    "Alert",
+    "AlertEvent",
 ]
