@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
+import pandas as pd
 import streamlit as st
 
 from frontend.api.client import BackendClient
@@ -139,29 +140,29 @@ def _render_hero(
     )
 
     st.markdown(
-        f"""
-        <div class="ops-hero">
-            <div class="ops-hero-title">Ops Center</div>
-            <div class="ops-hero-sub">
-                Sylhet agent network · synthetic demonstration only
-            </div>
-            <div class="ops-hero-metrics">
-                <div class="ops-hero-metric">
-                    <div class="ops-hero-metric-label">Active Agents</div>
-                    <div class="ops-hero-metric-value">{active_agents:,}</div>
-                    <div class="ops-hero-metric-delta up">
-                        of {total_agents:,} total
-                    </div>
-                </div>
-                <div class="ops-hero-metric">
-                    {new_badge}
-                    <div class="ops-hero-metric-label">Active Alerts</div>
-                    <div class="ops-hero-metric-value">{active_alerts}</div>
-                    {alert_line}
-                </div>
-            </div>
-        </div>
-        """,
+        (
+            '<div class="ops-hero">'
+            '<div class="ops-hero-title">Ops Center</div>'
+            '<div class="ops-hero-sub">'
+            "Sylhet agent network · synthetic demonstration only"
+            "</div>"
+            '<div class="ops-hero-metrics">'
+            '<div class="ops-hero-metric">'
+            '<div class="ops-hero-metric-label">Active Agents</div>'
+            f'<div class="ops-hero-metric-value">{active_agents:,}</div>'
+            '<div class="ops-hero-metric-delta up">'
+            f"of {total_agents:,} total"
+            "</div>"
+            "</div>"
+            '<div class="ops-hero-metric">'
+            f"{new_badge}"
+            '<div class="ops-hero-metric-label">Active Alerts</div>'
+            f'<div class="ops-hero-metric-value">{active_alerts}</div>'
+            f"{alert_line}"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
         unsafe_allow_html=True,
     )
 
@@ -201,18 +202,18 @@ def _render_provider_health(providers: list[dict]) -> None:
             badge_class = "uptime-badge"
             latency = f"{fresh}/{total} agents fresh"
 
-        rows_html += f"""
-        <div class="provider-row">
-            <div class="provider-row-left">
-                <div class="provider-icon {icon_class}">{icon_char}</div>
-                <div>
-                    <div class="provider-name">{escape(name)}</div>
-                    <div class="provider-meta">Feed status: {escape(latency)}</div>
-                </div>
-            </div>
-            <span class="{badge_class}">{escape(uptime)}</span>
-        </div>
-        """
+        rows_html += (
+            '<div class="provider-row">'
+            '<div class="provider-row-left">'
+            f'<div class="provider-icon {icon_class}">{icon_char}</div>'
+            "<div>"
+            f'<div class="provider-name">{escape(name)}</div>'
+            f'<div class="provider-meta">Feed status: {escape(latency)}</div>'
+            "</div>"
+            "</div>"
+            f'<span class="{badge_class}">{escape(uptime)}</span>'
+            "</div>"
+        )
 
     st.markdown(
         f'<div class="ops-card">{rows_html}</div>',
@@ -228,21 +229,49 @@ def _render_secondary_metrics(
     """Shared cash and open cases mini-cards."""
 
     st.markdown(
-        f"""
-        <div class="ops-card-grid">
-            <div class="ops-mini-card">
-                <div class="ops-mini-icon cash">💵</div>
-                <div class="ops-mini-label">Shared Cash</div>
-                <div class="ops-mini-value">{escape(shared_cash)}</div>
-            </div>
-            <div class="ops-mini-card">
-                <div class="ops-mini-icon cases">📋</div>
-                <div class="ops-mini-label">Open Cases</div>
-                <div class="ops-mini-value">{open_cases} Active</div>
-            </div>
-        </div>
-        """,
+        (
+            '<div class="ops-card-grid">'
+            '<div class="ops-mini-card">'
+            '<div class="ops-mini-icon cash">💵</div>'
+            '<div class="ops-mini-label">Shared Cash</div>'
+            f'<div class="ops-mini-value">{escape(shared_cash)}</div>'
+            "</div>"
+            '<div class="ops-mini-card">'
+            '<div class="ops-mini-icon cases">📋</div>'
+            '<div class="ops-mini-label">Open Cases</div>'
+            f'<div class="ops-mini-value">{open_cases} Active</div>'
+            "</div>"
+            "</div>"
+        ),
         unsafe_allow_html=True,
+    )
+
+
+def _render_cash_by_branch_chart(agent_rows: list[dict]) -> None:
+    """Bar chart of shared physical cash per branch."""
+
+    rows = []
+    for row in agent_rows:
+        try:
+            cash = float(row.get("shared_cash") or 0)
+        except (TypeError, ValueError):
+            continue
+        name = str(row.get("agent_name") or row.get("agent_code") or "")
+        name = name.replace("Synthetic ", "").replace(" Agent", "")
+        rows.append({"Branch": name, "Shared cash (৳)": cash})
+
+    if len(rows) < 2:
+        return
+
+    st.markdown(
+        '<div class="section-heading">Shared cash by branch</div>',
+        unsafe_allow_html=True,
+    )
+    st.bar_chart(
+        pd.DataFrame(rows),
+        x="Branch",
+        y="Shared cash (৳)",
+        height=240,
     )
 
 
@@ -290,21 +319,23 @@ def _render_investigate(
         col_card, col_btn = st.columns([5, 1])
         with col_card:
             st.markdown(
-                f"""
-                <div class="ops-card" style="margin-bottom:0.5rem;padding:0.75rem 1rem">
-                    <div class="investigate-row" style="border:none;padding:0">
-                        <div class="investigate-left">
-                            <div class="{avatar_class}">👤</div>
-                            <div>
-                                <div class="investigate-code">{escape(display_code)}</div>
-                                <div style="font-size:0.78rem;color:#64748b">{escape(label)}</div>
-                                <div class="{status_class}">{escape(status)}</div>
-                            </div>
-                        </div>
-                        <span class="investigate-chevron">›</span>
-                    </div>
-                </div>
-                """,
+                (
+                    '<div class="ops-card" '
+                    'style="margin-bottom:0.5rem;padding:0.75rem 1rem">'
+                    '<div class="investigate-row" style="border:none;padding:0">'
+                    '<div class="investigate-left">'
+                    f'<div class="{avatar_class}">👤</div>'
+                    "<div>"
+                    f'<div class="investigate-code">{escape(display_code)}</div>'
+                    '<div style="font-size:0.78rem;color:#64748b">'
+                    f"{escape(label)}</div>"
+                    f'<div class="{status_class}">{escape(status)}</div>'
+                    "</div>"
+                    "</div>"
+                    '<span class="investigate-chevron">›</span>'
+                    "</div>"
+                    "</div>"
+                ),
                 unsafe_allow_html=True,
             )
         with col_btn:
@@ -369,6 +400,7 @@ def render_overview(client: BackendClient) -> None:
         shared_cash=shared_cash_total,
         open_cases=open_cases,
     )
+    _render_cash_by_branch_chart(agent_rows)
     _render_investigate(agent_rows)
 
     st.markdown(

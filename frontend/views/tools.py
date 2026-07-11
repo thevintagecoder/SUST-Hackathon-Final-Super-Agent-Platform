@@ -344,32 +344,45 @@ def _render_network(client: BackendClient) -> None:
         )
         submitted = st.form_submit_button("Find nearby support", type="primary")
 
-    if not submitted:
+    if submitted:
+        result = run_api_call(
+            "Searching the agent network…",
+            lambda: client.find_network_support(
+                {
+                    "requesting_agent_code": requesting_agent,
+                    "provider_code": provider_code,
+                    "transaction_type": transaction_type,
+                    "amount": amount,
+                    "max_distance_km": max_km,
+                }
+            ),
+        )
+        if result is not None:
+            st.session_state["network_result"] = result
+            st.session_state["network_result_agent"] = requesting_agent
+            st.session_state["network_result_provider"] = provider_code
+
+    stored = st.session_state.get("network_result")
+    if stored is None:
+        st.caption(
+            "Pick the scenario card above or fill in the form, then "
+            "click **Find nearby support**."
+        )
         return
 
-    result = run_api_call(
-        "Searching the agent network…",
-        lambda: client.find_network_support(
-            {
-                "requesting_agent_code": requesting_agent,
-                "provider_code": provider_code,
-                "transaction_type": transaction_type,
-                "amount": amount,
-                "max_distance_km": max_km,
-            }
-        ),
+    _render_network_result(
+        stored,
+        st.session_state.get("network_result_agent", requesting_agent),
+        st.session_state.get("network_result_provider", provider_code),
+        client,
     )
-
-    if result is None:
-        return
-
-    _render_network_result(result, requesting_agent, provider_code)
 
 
 def _render_network_result(
     result: dict,
     requesting_agent: str,
     provider_code: str,
+    client: BackendClient,
 ) -> None:
     local_ok = result.get("local_serviceable", False)
     local_avail = result.get("local_available_amount", 0)
@@ -434,10 +447,135 @@ def _render_network_result(
             hide_index=True,
             width="stretch",
         )
+
+        _render_network_capacity_chart(
+            candidates=candidates,
+            shortfall=shortfall,
+            provider=provider,
+        )
+        _render_one_click_support(
+            candidates=candidates,
+            result=result,
+            requesting_agent=requesting_agent,
+            client=client,
+        )
     elif not local_ok:
         st.warning("No nearby agents found within the search radius.")
 
     render_technical_detail(result)
+
+
+def _render_network_capacity_chart(
+    *,
+    candidates: list[dict],
+    shortfall,
+    provider: str,
+) -> None:
+    """Bar chart: each candidate's usable capacity vs the shortfall."""
+
+    chart_rows = []
+    for c in candidates:
+        try:
+            capacity = float(c.get("supportable_capacity") or 0)
+        except (TypeError, ValueError):
+            capacity = 0.0
+        name = str(c.get("name") or c.get("agent_code") or "")
+        name = name.replace("Synthetic ", "").replace(" Agent", "")
+        chart_rows.append({"Branch": name, "Amount (৳)": capacity, "Type": "Usable capacity"})
+
+    try:
+        shortfall_amount = float(shortfall or 0)
+    except (TypeError, ValueError):
+        shortfall_amount = 0.0
+    if shortfall_amount > 0:
+        chart_rows.append(
+            {
+                "Branch": "NEEDED",
+                "Amount (৳)": shortfall_amount,
+                "Type": "Shortfall to cover",
+            }
+        )
+
+    if not chart_rows:
+        return
+
+    st.markdown(f"**{provider} capacity available nearby vs the shortfall**")
+    frame = pd.DataFrame(chart_rows)
+    st.bar_chart(
+        frame,
+        x="Branch",
+        y="Amount (৳)",
+        color="Type",
+        height=260,
+    )
+
+
+def _render_one_click_support(
+    *,
+    candidates: list[dict],
+    result: dict,
+    requesting_agent: str,
+    client: BackendClient,
+) -> None:
+    """One-click agent-to-agent support request from a candidate row."""
+
+    viable = [
+        c for c in candidates if c.get("can_cover_shortfall")
+    ]
+    if not viable:
+        return
+
+    st.markdown("#### Ask a peer agent for support")
+    st.caption(
+        "Creates a formal agent-to-agent support request that operations "
+        "can accept, escalate, or resolve. No money moves automatically."
+    )
+
+    cols = st.columns(len(viable))
+    for col, candidate in zip(cols, viable):
+        code = str(candidate.get("agent_code") or "")
+        name = str(candidate.get("name") or code)
+        name = name.replace("Synthetic ", "").replace(" Agent", "")
+        recommended = (
+            candidate.get("recommendation_status") == "RECOMMENDED"
+        )
+        label = (
+            f"Request from {name}"
+            + (" (recommended)" if recommended else " (confirm first)")
+        )
+        with col:
+            if st.button(
+                label,
+                key=f"support_req_{code}",
+                type="primary" if recommended else "secondary",
+            ):
+                shortfall_amount = float(result.get("shortfall") or 0)
+                created = run_api_call(
+                    f"Creating support request to {name}…",
+                    lambda: client.create_support_request(
+                        {
+                            "requesting_agent_code": requesting_agent,
+                            "supporting_agent_code": code,
+                            "provider_code": result.get("provider_code"),
+                            "transaction_type": result.get(
+                                "transaction_type", "cash_in"
+                            ),
+                            "requested_amount": shortfall_amount,
+                            "reason": (
+                                "Float shortfall found by network search — "
+                                f"short by ৳{shortfall_amount:,.0f}."
+                            ),
+                            "created_by": "ops.coordinator",
+                        }
+                    ),
+                )
+                if created is not None:
+                    st.session_state["selected_support_request"] = created
+                    st.success(
+                        f"Support request #{created.get('id')} sent to "
+                        f"{name}. Track it under **Advanced dashboards → "
+                        "Support only**, or in **Cases**."
+                    )
 
 
 # ── Forecast ──────────────────────────────────────────────────────────────────
@@ -577,6 +715,13 @@ def _render_forecast_result(result: dict, provider_code: str) -> None:
         money(net_per_hour) if net_per_hour else "—",
     )
 
+    _render_runway_chart(
+        current_balance=current_bal,
+        safety_threshold=safety_thresh,
+        net_per_hour=net_per_hour,
+        provider=provider,
+    )
+
     if breach_time:
         st.markdown(
             f"At this burn rate, the safety threshold will be reached "
@@ -598,6 +743,47 @@ def _render_forecast_result(result: dict, provider_code: str) -> None:
             st.write(f"- {factor}")
 
     render_technical_detail(result)
+
+
+def _render_runway_chart(
+    *,
+    current_balance,
+    safety_threshold,
+    net_per_hour,
+    provider: str,
+) -> None:
+    """Line chart: projected float vs safety threshold over 24 hours."""
+
+    try:
+        balance = float(current_balance or 0)
+        threshold = float(safety_threshold or 0)
+        burn = float(net_per_hour or 0)
+    except (TypeError, ValueError):
+        return
+    if balance <= 0:
+        return
+
+    hours = list(range(0, 25))
+    projected = [max(balance - burn * h, 0.0) for h in hours]
+    frame = pd.DataFrame(
+        {
+            "Hours from now": hours,
+            f"Projected {provider} float (৳)": projected,
+            "Safety threshold (৳)": [threshold] * len(hours),
+        }
+    )
+
+    st.markdown("**Projected float over the next 24 hours**")
+    st.line_chart(
+        frame,
+        x="Hours from now",
+        height=260,
+    )
+    if burn <= 0:
+        st.caption(
+            "No net consumption detected in the lookback window, so the "
+            "projection stays flat."
+        )
 
 
 # ── Anomaly ───────────────────────────────────────────────────────────────────
@@ -704,6 +890,8 @@ def _render_anomaly_result(result: dict, provider_code: str) -> None:
             f"{recent_count} / {baseline_count}",
         )
 
+        _render_anomaly_chart(recent_count, baseline_count)
+
         if category == "repeated_amounts" and repeated_count:
             st.markdown(
                 f"**{repeated_count} transactions** had similar amounts "
@@ -725,6 +913,7 @@ def _render_anomaly_result(result: dict, provider_code: str) -> None:
         col1, col2 = st.columns(2)
         col1.metric("Recent transactions", recent_count)
         col2.metric("Baseline transactions", baseline_count)
+        _render_anomaly_chart(recent_count, baseline_count)
 
     if result.get("warning_message"):
         st.caption(result["warning_message"])
@@ -741,6 +930,32 @@ def _render_anomaly_result(result: dict, provider_code: str) -> None:
         )
 
     render_technical_detail(result)
+
+
+def _render_anomaly_chart(recent_count, baseline_count) -> None:
+    """Bar chart: last 60 min vs prior 60 min transaction volume."""
+
+    try:
+        recent = int(recent_count or 0)
+        baseline = int(baseline_count or 0)
+    except (TypeError, ValueError):
+        return
+    if recent == 0 and baseline == 0:
+        return
+
+    frame = pd.DataFrame(
+        {
+            "Window": ["Prior 60 min (baseline)", "Last 60 min"],
+            "Transactions": [baseline, recent],
+        }
+    )
+    st.markdown("**Transaction volume — last hour vs baseline**")
+    st.bar_chart(
+        frame,
+        x="Window",
+        y="Transactions",
+        height=220,
+    )
 
 
 # ── Helper to apply recipe values to session state ────────────────────────────

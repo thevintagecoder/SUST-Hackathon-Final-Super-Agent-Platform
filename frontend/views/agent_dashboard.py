@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from frontend.api.client import BackendClient
@@ -119,6 +120,11 @@ def render_agent_dashboard(client: BackendClient) -> None:
                 "Provider float has not been loaded for this Agent.",
             )
 
+    _render_liquidity_chart(
+        shared_cash=shared_cash,
+        balances=balances,
+    )
+
     risk_columns = st.columns(3)
     risk_columns[0].metric(
         "Open alerts",
@@ -153,6 +159,53 @@ def render_agent_dashboard(client: BackendClient) -> None:
         )
     )
 
+    _render_attention_section(data, agent_code)
+
+
+def _render_liquidity_chart(
+    *,
+    shared_cash: dict,
+    balances: list[dict],
+) -> None:
+    """Bar chart of the agent's liquidity by resource."""
+
+    rows = []
+    if shared_cash.get("available"):
+        try:
+            rows.append(
+                {
+                    "Resource": "Shared cash",
+                    "Balance (৳)": float(shared_cash.get("balance") or 0),
+                }
+            )
+        except (TypeError, ValueError):
+            pass
+    for balance in balances:
+        try:
+            rows.append(
+                {
+                    "Resource": f"{provider_label(balance.get('provider_code'))} float",
+                    "Balance (৳)": float(
+                        balance.get("electronic_balance") or 0
+                    ),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+
+    if len(rows) < 2:
+        return
+
+    st.markdown("**Liquidity at a glance**")
+    st.bar_chart(
+        pd.DataFrame(rows),
+        x="Resource",
+        y="Balance (৳)",
+        height=240,
+    )
+
+
+def _render_attention_section(data: dict, agent_code: str) -> None:
     st.markdown("### What needs attention")
     recent_alerts = [
         alert
