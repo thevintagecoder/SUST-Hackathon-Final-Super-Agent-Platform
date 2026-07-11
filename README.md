@@ -115,3 +115,45 @@ Restart PostgreSQL:
 ```bash
 brew services start postgresql@17
 ```
+
+## SQLAlchemy and Alembic
+
+The application uses SQLAlchemy 2.x for ORM-based database access and
+Alembic for reproducible database-schema migrations.
+
+### Apply all migrations
+
+From the project root:
+
+```bash
+python -m alembic -c backend/alembic.ini upgrade head
+```
+
+### View the current migration
+
+```bash
+python -m alembic -c backend/alembic.ini current
+```
+
+### Check for model changes without a migration
+
+```bash
+python -m alembic -c backend/alembic.ini check
+```
+
+### Create a migration after changing a model
+
+```bash
+python -m alembic \
+  -c backend/alembic.ini \
+  revision \
+  --autogenerate \
+  -m "describe the schema change"
+```
+
+Generated migrations must be reviewed before they are applied.
+
+### Current database tables
+
+- `alembic_version`
+- `agents`

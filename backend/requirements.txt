@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 psycopg[binary]
+SQLAlchemy>=2.0,<3.0
+alembic>=1.18,<2.0
 pytest
 pytest-cov
 httpx
