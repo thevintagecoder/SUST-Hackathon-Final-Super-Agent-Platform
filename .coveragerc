@@ -1,6 +1,9 @@
 [run]
 relative_files = True
-source = backend/app
+source =
+    backend/app
+    core
+    synthetic_data
 branch = True
 
 [report]
