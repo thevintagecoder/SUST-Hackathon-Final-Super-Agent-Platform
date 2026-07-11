@@ -1,19 +1,86 @@
-"""Streamlit entry point for the liquidity intelligence platform."""
+"""Streamlit entry point for the Ops Center liquidity desk."""
 
 from __future__ import annotations
 
 import os
-from typing import Any
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path when Streamlit runs this file.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import streamlit as st
 
-from frontend.api.client import (
-    BackendAPIError,
-    BackendClient,
+from frontend.api.client import BackendAPIError, BackendClient
+from frontend.components.common import (
+    SAMPLE_SCENARIO_ID,
+    render_demo_path,
 )
+from frontend.components.scenarios import SCENARIO_REGISTRY
+from frontend.components.styles import apply_app_styles
+from frontend.views.agent_dashboard import render_agent_dashboard
+from frontend.views.alerts import render_alerts
+from frontend.views.cases import render_cases
+from frontend.views.evaluation_dashboard import (
+    render_evaluation_dashboard,
+)
+from frontend.views.overview import render_overview
+from frontend.views.operations_dashboard import (
+    render_operations_dashboard,
+)
+from frontend.views.provider_dashboard import (
+    render_provider_dashboard,
+)
+from frontend.views.support_requests import render_support_requests
+from frontend.views.tools import render_anomalies, render_liquidity
 
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8000"
+
+MAIN_PAGES = {
+    "Dashboard": render_overview,
+    "Liquidity": render_liquidity,
+    "Anomalies": render_anomalies,
+    "Cases": render_cases,
+}
+
+ADVANCED_PAGES = {
+    "Agent desk": render_agent_dashboard,
+    "Provider": render_provider_dashboard,
+    "Operations": render_operations_dashboard,
+    "Alerts only": render_alerts,
+    "Support only": render_support_requests,
+    "Model checks": render_evaluation_dashboard,
+}
+
+NAV_ITEMS = [
+    ("Dashboard", "📊"),
+    ("Liquidity", "💵"),
+    ("Anomalies", "🔍"),
+    ("Cases", "📋"),
+]
+
+DB_OPTIONAL_PAGES = {"Model checks"}
+
+
+def _scenario_options() -> dict[str, str | None]:
+    """Build human-readable scenario labels → raw IDs."""
+
+    options: dict[str, str | None] = {"All scenarios": None}
+    for sid, info in SCENARIO_REGISTRY.items():
+        options[f"{info.label} ({sid})"] = sid
+    return options
+
+
+SCENARIO_OPTIONS = _scenario_options()
+
+LANGUAGE_OPTIONS = {
+    "English": "en",
+    "বাংলা": "bn",
+    "Banglish": "bn_latn",
+}
 
 
 def get_backend_base_url() -> str:
@@ -22,113 +89,182 @@ def get_backend_base_url() -> str:
     return os.getenv(
         "FASTAPI_BASE_URL",
         DEFAULT_BACKEND_URL,
-    )
+    ).strip().rstrip("/") or DEFAULT_BACKEND_URL
 
 
 @st.cache_resource
-def get_backend_client(
-    base_url: str,
-) -> BackendClient:
+def get_backend_client(base_url: str) -> BackendClient:
     """Create one shared backend API client."""
 
-    return BackendClient(
-        base_url=base_url,
-    )
+    return BackendClient(base_url=base_url)
 
 
-def render_health_response(
-    health_data: dict[str, Any],
-) -> None:
-    """Display the backend connection result."""
+def _render_bottom_nav() -> None:
+    """Render four-tab Ops Center navigation."""
 
-    st.success(
-        "Connected successfully to the FastAPI backend."
-    )
+    current_page = st.session_state.get("current_page", "Dashboard")
 
-    with st.expander(
-        "View backend health response",
-        expanded=False,
-    ):
-        st.json(
-            health_data
+    st.markdown('<div class="bottom-nav">', unsafe_allow_html=True)
+    cols = st.columns(4)
+    for col, (page, icon) in zip(cols, NAV_ITEMS):
+        button_type = (
+            "primary" if page == current_page else "secondary"
         )
+        label = f"{icon} {page}"
+        if col.button(
+            label,
+            key=f"nav_{page}",
+            type=button_type,
+            use_container_width=True,
+        ):
+            st.session_state["current_page"] = page
+            st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 st.set_page_config(
-    page_title=(
-        "Super Agent Liquidity Intelligence"
-    ),
-    page_icon="💧",
+    page_title="Ops Center",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-st.title(
-    "Super Agent Liquidity & Risk Intelligence"
-)
-
-st.caption(
-    "Decision-support platform using controlled "
-    "synthetic data and human-reviewed alerts."
-)
-
-st.info(
-    "This prototype does not move money, reserve funds, "
-    "suspend Agents, or perform automatic enforcement."
-)
-
-st.divider()
-
-st.subheader(
-    "System connection"
-)
+apply_app_styles()
 
 backend_base_url = get_backend_base_url()
+backend_client = get_backend_client(backend_base_url)
 
-st.write(
-    "FastAPI backend:"
-)
-
-st.code(
-    backend_base_url,
-    language=None,
-)
-
-backend_client = get_backend_client(
-    backend_base_url
-)
+api_ok = False
+database_ok = False
+connection_error = ""
 
 try:
-    health_response = backend_client.health()
-
+    api_ok = backend_client.health().get("status") == "ok"
 except BackendAPIError as error:
+    connection_error = str(error)
+
+if api_ok:
+    try:
+        database_ok = (
+            backend_client.health_database().get("status") == "ok"
+        )
+    except BackendAPIError as error:
+        connection_error = str(error)
+
+status_left, status_right = st.columns([2, 1])
+with status_left:
+    api_class = "ok" if api_ok else "bad"
+    db_class = "ok" if database_ok else "bad"
+    st.markdown(
+        (
+            '<div class="status-row">'
+            f'<span class="status-pill {api_class}">'
+            f"● API {'online' if api_ok else 'offline'}</span>"
+            f'<span class="status-pill {db_class}">'
+            f"● Data {'ready' if database_ok else 'unavailable'}</span>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+with status_right:
+    render_demo_path()
+
+_render_bottom_nav()
+
+with st.container(border=True):
+    context_cols = st.columns([1.4, 1.2, 2.4])
+    scenario_options_list = list(SCENARIO_OPTIONS)
+    saved_label = st.session_state.get("scenario_label")
+    if saved_label in scenario_options_list:
+        default_scenario_idx = scenario_options_list.index(saved_label)
+    else:
+        default_scenario_idx = next(
+            (
+                i for i, k in enumerate(scenario_options_list)
+                if SAMPLE_SCENARIO_ID in k
+            ),
+            1,
+        )
+    scenario_label = context_cols[0].selectbox(
+        "Active scenario",
+        scenario_options_list,
+        index=default_scenario_idx,
+        help=(
+            "Filters alerts and check results to this test scenario. "
+            "Balances come from whichever scenario was last loaded "
+            "into PostgreSQL."
+        ),
+    )
+    language_label = context_cols[1].selectbox(
+        "Alert text language",
+        list(LANGUAGE_OPTIONS),
+        index=list(LANGUAGE_OPTIONS).index(
+            st.session_state.get("language_label", "English")
+        )
+        if st.session_state.get("language_label") in LANGUAGE_OPTIONS
+        else 0,
+    )
+    scenario_id_selected = SCENARIO_OPTIONS.get(scenario_label)
+    if scenario_id_selected:
+        info = SCENARIO_REGISTRY.get(scenario_id_selected)
+        hint = info.what_it_tests if info else ""
+    else:
+        hint = "Showing all scenarios. Pick one above for a focused demo."
+    context_cols[2].caption(hint)
+
+st.session_state["scenario_label"] = scenario_label
+st.session_state["scenario_id"] = SCENARIO_OPTIONS[scenario_label]
+st.session_state["language_label"] = language_label
+st.session_state["language_code"] = LANGUAGE_OPTIONS[language_label]
+st.session_state["_scenario_options"] = SCENARIO_OPTIONS
+
+page_name = st.session_state.get("current_page", "Dashboard")
+needs_database = page_name not in DB_OPTIONAL_PAGES
+
+if not api_ok:
     st.error(
-        str(error)
+        connection_error
+        or "The FastAPI backend is not available."
     )
-
-    st.warning(
-        "Start FastAPI in another terminal, then reload "
-        "this Streamlit page."
-    )
-
     st.code(
-        "uvicorn backend.app.main:app --reload",
+        "python -m uvicorn backend.app.main:app --reload",
         language="bash",
     )
-
     st.stop()
 
-render_health_response(
-    health_response
-)
+if needs_database and not database_ok:
+    st.error(
+        connection_error
+        or "PostgreSQL is not available for this page."
+    )
+    st.caption(
+        "Model checks can run with API only. Other pages need "
+        "migrations and synthetic data loaded."
+    )
+    st.code(
+        "python -m backend.app.data_loading.synthetic_loader "
+        "--scenario NETWORK-001",
+        language="bash",
+    )
+    st.stop()
 
-st.divider()
+if not database_ok and page_name in DB_OPTIONAL_PAGES:
+    st.warning(
+        "Database is offline. You can still view Model checks; "
+        "live balances and alerts are unavailable."
+    )
 
-st.subheader(
-    "Frontend foundation ready"
-)
+if page_name in MAIN_PAGES:
+    MAIN_PAGES[page_name](backend_client)
+else:
+    st.session_state["current_page"] = "Dashboard"
+    MAIN_PAGES["Dashboard"](backend_client)
 
-st.write(
-    "The Streamlit application is now communicating "
-    "with FastAPI through the centralized API client."
-)
+with st.expander("Advanced dashboards", expanded=False):
+    advanced_choice = st.selectbox(
+        "Open a detailed dashboard",
+        ["— pick one —", *ADVANCED_PAGES],
+        key="advanced_page_pick",
+    )
+    if advanced_choice != "— pick one —":
+        ADVANCED_PAGES[advanced_choice](backend_client)

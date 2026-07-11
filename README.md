@@ -17,20 +17,13 @@ This project:
 
 Completed:
 
-- FastAPI application
-- `GET /health`
-- Swagger UI and ReDoc
-- automated API tests
+- FastAPI application with liquidity, alerts, and dashboards
+- PostgreSQL + Alembic migrations
+- synthetic data loading
+- Streamlit frontend connected through the centralized HTTP client
+- automated API and frontend client tests
 - environment-based configuration
 - `.env.example`
-
-Not added yet:
-
-- PostgreSQL
-- transaction data
-- liquidity analytics
-- anomaly detection
-- Streamlit
 
 ## Local configuration
 
@@ -42,12 +35,24 @@ cp .env.example .env
 
 The local `.env` file is ignored by Git.
 
+Optional frontend override:
+
+```bash
+FASTAPI_BASE_URL=http://127.0.0.1:8000
+```
+
 ## Run the backend
 
 From the project root:
 
 ```bash
 source .venv/bin/activate
+python -m uvicorn backend.app.main:app --reload
+```
+
+On Windows PowerShell:
+
+```powershell
 python -m uvicorn backend.app.main:app --reload
 ```
 
@@ -63,10 +68,23 @@ ReDoc:
 http://127.0.0.1:8000/redoc
 ```
 
+## Run the frontend
+
+In a second terminal from the project root:
+
+```bash
+pip install -r frontend/requirements.txt
+python -m streamlit run frontend/app.py
+```
+
+The Streamlit app talks only to FastAPI (`FASTAPI_BASE_URL`, default
+`http://127.0.0.1:8000`). It does not open the database directly.
+
 ## Run tests
 
 ```bash
 python -m pytest backend/tests -q
+python -m pytest frontend/tests -q
 ```
 
 ## Local PostgreSQL
