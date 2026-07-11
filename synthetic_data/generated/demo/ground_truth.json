@@ -1,0 +1,52 @@
+{
+  "agent_code": "AGENT-SYL-001",
+  "generated_at": "2026-07-11T08:00:00Z",
+  "providers": [
+    "BKASH_SIM",
+    "NAGAD_SIM",
+    "ROCKET_SIM"
+  ],
+  "scenarios": [
+    {
+      "anomaly_category": null,
+      "anomaly_expected": false,
+      "description": "Stable shared cash and healthy balances across all synthetic providers.",
+      "expected_shortage_resource": null,
+      "expected_shortage_time": null,
+      "injection_start_time": null,
+      "name": "Normal operation",
+      "scenario_id": "NORMAL-001"
+    },
+    {
+      "anomaly_category": null,
+      "anomaly_expected": false,
+      "description": "BKASH_SIM is under pressure while other provider balances remain healthy.",
+      "expected_shortage_resource": "BKASH_SIM",
+      "expected_shortage_time": "2026-07-11T16:30:00Z",
+      "injection_start_time": "2026-07-11T12:00:00Z",
+      "name": "Hidden provider shortage",
+      "scenario_id": "SHORTAGE-001"
+    },
+    {
+      "anomaly_category": "repeated_amounts",
+      "anomaly_expected": true,
+      "description": "Several similar BKASH_SIM cash-in transactions occur in a short time window.",
+      "expected_shortage_resource": "BKASH_SIM",
+      "expected_shortage_time": "2026-07-11T17:00:00Z",
+      "injection_start_time": "2026-07-11T13:00:00Z",
+      "name": "Repeated amounts and increased velocity",
+      "scenario_id": "REPEATED-001"
+    },
+    {
+      "anomaly_category": null,
+      "anomaly_expected": false,
+      "description": "ROCKET_SIM position data becomes delayed, reducing forecast confidence.",
+      "expected_shortage_resource": null,
+      "expected_shortage_time": null,
+      "injection_start_time": "2026-07-11T14:00:00Z",
+      "name": "Delayed provider feed",
+      "scenario_id": "STALE-001"
+    }
+  ],
+  "seed": 42
+}
