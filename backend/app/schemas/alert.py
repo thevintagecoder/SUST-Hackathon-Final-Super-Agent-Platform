@@ -1,5 +1,6 @@
 """Schemas shared by the multilingual alert system."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -13,6 +14,21 @@ AlertType = Literal[
     "SERVICEABILITY_SHORTFALL",
 ]
 
+AlertSeverity = Literal[
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+    "CRITICAL",
+]
+
+AlertStatus = Literal[
+    "OPEN",
+    "ACKNOWLEDGED",
+    "ASSIGNED",
+    "ESCALATED",
+    "RESOLVED",
+]
+
 AlertTransactionType = Literal[
     "cash_in",
     "cash_out",
@@ -20,7 +36,7 @@ AlertTransactionType = Literal[
 
 
 class LocalizedAlertText(BaseModel):
-    """Store one alert message in three supported languages."""
+    """Store alert text in all supported languages."""
 
     en: str
     bn: str
@@ -28,7 +44,7 @@ class LocalizedAlertText(BaseModel):
 
 
 class RenderedAlertTemplate(BaseModel):
-    """Store the localized presentation text for one alert."""
+    """Store localized presentation text for one alert."""
 
     alert_type: AlertType
 
@@ -107,7 +123,7 @@ class AlertGenerationRequest(BaseModel):
 
 
 class AlertGenerationResponse(BaseModel):
-    """Describe the result of alert evaluation and persistence."""
+    """Describe alert evaluation and persistence."""
 
     alert_type: AlertType
 
@@ -120,3 +136,67 @@ class AlertGenerationResponse(BaseModel):
 
     human_review_required: bool
     automatic_action_taken: bool = False
+
+
+class AlertEventResponse(BaseModel):
+    """Return one event from an alert timeline."""
+
+    id: int
+    event_type: str
+    actor: str
+    note: str | None
+    event_data: dict[str, object]
+    created_at: datetime
+
+
+class AlertSummaryResponse(BaseModel):
+    """Return one alert in a list view."""
+
+    id: int
+
+    alert_type: AlertType
+    severity: AlertSeverity
+    status: AlertStatus
+
+    agent_code: str
+    provider_code: str | None
+    scenario_id: str | None
+
+    title: LocalizedAlertText
+
+    confidence: Decimal
+    freshness_state: str | None
+
+    human_review_required: bool
+    automatic_action_taken: bool
+
+    assigned_to: str | None
+
+    created_at: datetime
+    updated_at: datetime
+
+
+class AlertDetailResponse(AlertSummaryResponse):
+    """Return a complete alert and its timeline."""
+
+    source_reference: str | None
+
+    message: LocalizedAlertText
+    next_step: LocalizedAlertText
+
+    evidence: dict[str, object]
+
+    acknowledged_at: datetime | None
+    resolved_at: datetime | None
+
+    events: list[AlertEventResponse]
+
+
+class AlertListResponse(BaseModel):
+    """Return a paginated collection of alerts."""
+
+    items: list[AlertSummaryResponse]
+
+    total: int
+    limit: int
+    offset: int
