@@ -11,8 +11,11 @@ from frontend.components.common import (
     SAMPLE_AGENT_CODE,
     SAMPLE_SCENARIO_ID,
     agent_display_name,
+    cached_management_dashboard,
+    cached_provider_dashboard,
     format_timestamp,
     freshness_label,
+    money,
     provider_css_class,
     provider_label,
     render_alert_card,
@@ -28,6 +31,16 @@ def render_agent_dashboard(client: BackendClient) -> None:
     """Render a practical Agent-facing liquidity workspace."""
 
     st.header("Agent desk")
+    nav_cols = st.columns([3, 1])
+    with nav_cols[1]:
+        if st.button(
+            "Network overview",
+            key="agent_network_overview",
+            type="secondary",
+            use_container_width=True,
+        ):
+            st.session_state["current_page"] = "Network"
+            st.rerun()
     st.markdown(
         '<div class="section-intro">'
         "You are the field agent. Check what you can serve before "
@@ -124,6 +137,12 @@ def render_agent_dashboard(client: BackendClient) -> None:
         shared_cash=shared_cash,
         balances=balances,
     )
+    _render_bottleneck_callout(
+        client=client,
+        agent_code=agent_code,
+        balances=balances,
+        scenario_id=scenario_id,
+    )
 
     risk_columns = st.columns(3)
     risk_columns[0].metric(
@@ -202,6 +221,112 @@ def _render_liquidity_chart(
         x="Resource",
         y="Balance (৳)",
         height=240,
+    )
+
+
+def _render_bottleneck_callout(
+    *,
+    client: BackendClient,
+    agent_code: str,
+    balances: list[dict],
+    scenario_id: str | None,
+) -> None:
+    """Highlight the provider most likely to block customer service."""
+
+    if len(balances) < 2:
+        return
+
+    management = cached_management_dashboard(
+        client.base_url,
+        scenario_id,
+    )
+    risk_by_provider = {
+        str(row.get("provider_code") or ""): row
+        for row in management.get("provider_risks", [])
+    }
+
+    comparisons: list[dict] = []
+    for balance in balances:
+        provider_code = str(balance.get("provider_code") or "")
+        try:
+            agent_balance = float(balance.get("electronic_balance") or 0)
+        except (TypeError, ValueError):
+            continue
+        risk = risk_by_provider.get(provider_code, {})
+        agents_with_balance = int(risk.get("agents_with_balance") or 1) or 1
+        try:
+            network_total = float(
+                risk.get("total_electronic_balance") or 0
+            )
+        except (TypeError, ValueError):
+            network_total = 0.0
+        network_avg = network_total / agents_with_balance
+        ratio = (
+            agent_balance / network_avg
+            if network_avg > 0
+            else 1.0
+        )
+        comparisons.append(
+            {
+                "provider_code": provider_code,
+                "agent_balance": agent_balance,
+                "network_avg": network_avg,
+                "ratio": ratio,
+            }
+        )
+
+    if not comparisons:
+        return
+
+    bottleneck = min(comparisons, key=lambda row: row["ratio"])
+    others_healthy = any(
+        row["ratio"] >= 0.8
+        and row["provider_code"] != bottleneck["provider_code"]
+        for row in comparisons
+    )
+
+    provider_data = cached_provider_dashboard(
+        client.base_url,
+        bottleneck["provider_code"],
+        scenario_id,
+        5,
+    )
+    agent_row = next(
+        (
+            row
+            for row in provider_data.get("agent_balances", [])
+            if row.get("agent_code") == agent_code
+        ),
+        None,
+    )
+    at_threshold = bool(
+        agent_row and agent_row.get("at_or_below_safety_threshold")
+    )
+
+    if not at_threshold and not (
+        bottleneck["ratio"] < 0.6 and others_healthy
+    ):
+        return
+
+    provider_name = provider_label(bottleneck["provider_code"])
+    if at_threshold and others_healthy:
+        detail = (
+            f"{provider_name} is at or below the safety threshold "
+            f"({money(agent_row.get('prototype_safety_threshold'))}) "
+            "while your other provider floats look healthier."
+        )
+    else:
+        detail = (
+            f"{provider_name} is your bottleneck — "
+            f"{money(bottleneck['agent_balance'])} on hand vs "
+            f"{money(bottleneck['network_avg'])} network average "
+            "per agent."
+        )
+
+    st.warning(
+        f"**Bottleneck provider:** {detail} "
+        "Use **Liquidity → Find support** before large cash-ins on "
+        f"{provider_name}."
     )
 
 

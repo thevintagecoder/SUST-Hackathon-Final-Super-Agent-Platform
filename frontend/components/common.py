@@ -455,6 +455,51 @@ def format_timestamp(value: Any) -> str:
     return parsed.strftime("%d %b, %I:%M %p")
 
 
+PLACEHOLDER_BRANCH_LABELS = {
+    "",
+    "string",
+    "null",
+    "none",
+    "undefined",
+    "n/a",
+    "na",
+    "unknown",
+}
+
+
+def is_placeholder_branch_label(value: str | None) -> bool:
+    """Return True when a branch label is safe to show on charts."""
+
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return False
+    return cleaned.lower() not in PLACEHOLDER_BRANCH_LABELS
+
+
+def render_summary_metrics(items: list[tuple[str, str]]) -> None:
+    """Render alert-style summary cards that wrap instead of truncating."""
+
+    cards = []
+    for label, value in items:
+        display = str(value) if value not in (None, "") else "—"
+        cards.append(
+            (
+                f'<div class="alert-summary-card" title="{escape(display)}">'
+                f'<div class="alert-summary-label">{escape(label)}</div>'
+                f'<div class="alert-summary-value">{escape(display)}</div>'
+                "</div>"
+            )
+        )
+    st.markdown(
+        (
+            '<div class="alert-summary-grid">'
+            f"{''.join(cards)}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def metric_row(items: list[tuple[str, Any]]) -> None:
     if not items:
         return
@@ -601,16 +646,55 @@ def render_balance_card(
     )
 
 
+SHORTFALL_UNASSIGNED_STATUS = (
+    "Review nearby support options or refer the customer "
+    "through a human-approved coordination process."
+)
+
+
 def _alert_work_status(alert: dict[str, Any]) -> str:
     owner = alert.get("assigned_to")
     status = alert.get("status")
     if status == "RESOLVED":
         return "Closed — kept for audit."
     if not owner:
+        if alert.get("alert_type") == "SERVICEABILITY_SHORTFALL":
+            return (
+                localized_text(
+                    alert.get("next_step"),
+                    language=active_language(),
+                )
+                or SHORTFALL_UNASSIGNED_STATUS
+            )
         return "Waiting for someone to take ownership."
     if status == "OPEN":
         return f"Assigned to {owner} — open the alert for next steps."
     return f"{alert_status_label(status)} · owner {owner}"
+
+
+def navigate_to_peer_support(alert: dict[str, Any]) -> None:
+    """Pre-fill Liquidity → Find support from a shortfall alert."""
+
+    evidence = alert.get("evidence") or {}
+    agent_code = alert.get("agent_code") or SAMPLE_AGENT_CODE
+    provider_code = (
+        alert.get("provider_code")
+        or evidence.get("provider_code")
+        or SAMPLE_PROVIDER_CODE
+    )
+    transaction_type = evidence.get("transaction_type", "cash_in")
+    amount_raw = evidence.get("requested_amount")
+    try:
+        amount = float(str(amount_raw).replace(",", ""))
+    except (TypeError, ValueError):
+        amount = 80000.0
+
+    st.session_state["current_page"] = "Liquidity"
+    st.session_state["liquidity_tab"] = "network"
+    st.session_state["net_agent"] = agent_code
+    st.session_state["net_provider"] = provider_code
+    st.session_state["net_tx_type"] = transaction_type
+    st.session_state["net_amount"] = amount
 
 
 def render_alert_card(

@@ -227,6 +227,67 @@ p, li, label, .stMarkdown { color: var(--text); }
     color: #c2410c;
 }
 
+/* ── Investigate role filter ─────────────────────────────────── */
+.investigate-role-filter-wrap {
+    margin: 0 0 1rem 0;
+    position: relative;
+    z-index: 30;
+    clear: both;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.75rem 0.9rem;
+    box-shadow: var(--shadow);
+}
+.investigate-role-filter-wrap + div {
+    position: relative;
+    z-index: 1;
+}
+.investigate-role-filter-wrap div[data-testid="stSelectbox"] > div > div {
+    border-radius: 10px !important;
+}
+div[data-baseweb="popover"] {
+    z-index: 1000 !important;
+}
+
+/* ── Alert detail summary cards ──────────────────────────────── */
+.alert-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin: 0.35rem 0 1rem;
+}
+@media (max-width: 760px) {
+    .alert-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+.alert-summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.85rem 0.95rem;
+    box-shadow: var(--shadow);
+    min-width: 0;
+}
+.alert-summary-label {
+    color: var(--text-soft);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.alert-summary-value {
+    color: var(--blue);
+    font-size: clamp(0.82rem, 2.4vw, 1.15rem);
+    font-weight: 800;
+    line-height: 1.35;
+    margin-top: 0.2rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 /* ── Investigate agent list ──────────────────────────────────── */
 .investigate-row {
     display: flex;

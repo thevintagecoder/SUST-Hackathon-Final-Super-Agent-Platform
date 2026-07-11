@@ -10,18 +10,45 @@ import streamlit as st
 from frontend.api.client import BackendClient
 from frontend.components.common import (
     DEMO_MAIN_AGENT,
+    KNOWN_PROVIDER_CODES,
     SAMPLE_SCENARIO_ID,
     agent_display_name,
     cached_list_alerts,
     cached_management_dashboard,
     cached_operations_dashboard,
     cached_provider_dashboard,
+    is_placeholder_branch_label,
     money,
     numeric_sum,
     provider_label,
     run_api_call,
     safety_notice,
 )
+from frontend.views.agent_dashboard import render_agent_dashboard
+from frontend.views.alerts import render_alerts
+from frontend.views.evaluation_dashboard import render_evaluation_dashboard
+from frontend.views.operations_dashboard import render_operations_dashboard
+from frontend.views.provider_dashboard import render_provider_dashboard
+from frontend.views.support_requests import render_support_requests
+
+
+ROLE_FILTER_OPTIONS = [
+    "Agent desk",
+    "Provider",
+    "Operations",
+    "Alerts only",
+    "Support only",
+    "Model checks",
+]
+
+ROLE_FILTER_RENDERERS = {
+    "Agent desk": render_agent_dashboard,
+    "Provider": render_provider_dashboard,
+    "Operations": render_operations_dashboard,
+    "Alerts only": render_alerts,
+    "Support only": render_support_requests,
+    "Model checks": render_evaluation_dashboard,
+}
 
 
 def _agent_investigate_status(
@@ -93,7 +120,7 @@ def _load_overview_data(
     )
 
     providers: list[dict] = []
-    for provider_code in ("NAGAD_SIM", "BKASH_SIM"):
+    for provider_code in KNOWN_PROVIDER_CODES:
         result = run_api_call(
             f"Loading {provider_label(provider_code)}…",
             lambda code=provider_code: cached_provider_dashboard(
@@ -188,10 +215,14 @@ def _render_provider_health(providers: list[dict]) -> None:
             icon_class = "nagad"
             icon_char = "⚡"
             name = "Nagad API"
-        else:
+        elif code == "BKASH_SIM":
             icon_class = "bkash"
             icon_char = "💳"
             name = "bKash API"
+        else:
+            icon_class = "other"
+            icon_char = "🚀"
+            name = f"{provider_label(code)} API"
 
         if stale > 0:
             uptime = "Verify feed"
@@ -258,6 +289,8 @@ def _render_cash_by_branch_chart(agent_rows: list[dict]) -> None:
             continue
         name = str(row.get("agent_name") or row.get("agent_code") or "")
         name = name.replace("Synthetic ", "").replace(" Agent", "")
+        if not is_placeholder_branch_label(name):
+            continue
         rows.append({"Branch": name, "Shared cash (৳)": cash})
 
     if len(rows) < 2:
@@ -275,8 +308,118 @@ def _render_cash_by_branch_chart(agent_rows: list[dict]) -> None:
     )
 
 
+def _render_provider_portfolio(management: dict) -> None:
+    """Compare network-wide float, alerts, and feed trust by provider."""
+
+    rows = management.get("provider_risks", [])
+    if not rows:
+        return
+
+    st.markdown(
+        '<div class="section-heading">Provider Portfolio</div>',
+        unsafe_allow_html=True,
+    )
+
+    chart_rows = []
+    total_float = 0.0
+    total_high_alerts = 0
+    for row in rows:
+        code = str(row.get("provider_code") or "")
+        try:
+            balance = float(row.get("total_electronic_balance") or 0)
+        except (TypeError, ValueError):
+            balance = 0.0
+        high_alerts = int(row.get("high_or_critical_alert_count") or 0)
+        stale = int(row.get("non_fresh_balance_count") or 0)
+        agents = int(row.get("agents_with_balance") or 0)
+        fresh = max(agents - stale, 0)
+        total_float += balance
+        total_high_alerts += high_alerts
+        chart_rows.append(
+            {
+                "Provider": provider_label(code),
+                "Network float (৳)": balance,
+                "HIGH alerts": high_alerts,
+                "Fresh feeds": fresh,
+                "Stale feeds": stale,
+            }
+        )
+
+    if not chart_rows:
+        return
+
+    frame = pd.DataFrame(chart_rows)
+    float_col, alert_col = st.columns(2)
+    with float_col:
+        st.caption("Total electronic float across the network")
+        st.bar_chart(
+            frame,
+            x="Provider",
+            y="Network float (৳)",
+            height=220,
+        )
+    with alert_col:
+        st.caption("Active HIGH or CRITICAL alerts by provider")
+        st.bar_chart(
+            frame,
+            x="Provider",
+            y="HIGH alerts",
+            height=220,
+        )
+
+    feed_col1, feed_col2 = st.columns(2)
+    with feed_col1:
+        st.caption("Fresh balance feeds")
+        st.bar_chart(
+            frame,
+            x="Provider",
+            y="Fresh feeds",
+            height=180,
+        )
+    with feed_col2:
+        st.caption("Stale or delayed feeds")
+        st.bar_chart(
+            frame,
+            x="Provider",
+            y="Stale feeds",
+            height=180,
+        )
+
+    if total_float > 0 and total_high_alerts > 0:
+        stressed = max(
+            rows,
+            key=lambda row: int(
+                row.get("high_or_critical_alert_count") or 0
+            ),
+        )
+        stressed_code = str(stressed.get("provider_code") or "")
+        try:
+            stressed_float = float(
+                stressed.get("total_electronic_balance") or 0
+            )
+        except (TypeError, ValueError):
+            stressed_float = 0.0
+        stressed_high = int(
+            stressed.get("high_or_critical_alert_count") or 0
+        )
+        float_share = stressed_float / total_float * 100
+        alert_share = stressed_high / total_high_alerts * 100
+        st.markdown(
+            (
+                '<div class="notice">'
+                f"<b>{escape(provider_label(stressed_code))}</b> holds "
+                f"{float_share:.0f}% of network float but drives "
+                f"{alert_share:.0f}% of HIGH alerts — review stressed "
+                "branches before rebalancing float."
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+
 def _render_investigate(
     agent_rows: list[dict],
+    client: BackendClient,
 ) -> None:
     """Agent list with SYL-001 highlighted for the demo story."""
 
@@ -284,6 +427,26 @@ def _render_investigate(
         '<div class="section-heading">Investigate</div>',
         unsafe_allow_html=True,
     )
+
+    st.markdown(
+        '<div class="investigate-role-filter-wrap">',
+        unsafe_allow_html=True,
+    )
+    role_choice = st.selectbox(
+        "View dashboard as",
+        ROLE_FILTER_OPTIONS,
+        index=0,
+        key="role_filter_view",
+        help=(
+            "Switch stakeholder perspective while investigating branches. "
+            "Agent desk is the default view."
+        ),
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if role_choice != "Agent desk":
+        ROLE_FILTER_RENDERERS[role_choice](client)
+        st.divider()
 
     if not agent_rows:
         st.info(
@@ -396,12 +559,13 @@ def render_overview(client: BackendClient) -> None:
     )
 
     _render_provider_health(providers)
+    _render_provider_portfolio(management)
     _render_secondary_metrics(
         shared_cash=shared_cash_total,
         open_cases=open_cases,
     )
     _render_cash_by_branch_chart(agent_rows)
-    _render_investigate(agent_rows)
+    _render_investigate(agent_rows, client)
 
     st.markdown(
         '<div class="section-heading">Demo path</div>',

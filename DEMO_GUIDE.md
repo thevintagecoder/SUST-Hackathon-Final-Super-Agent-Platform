@@ -63,9 +63,10 @@ see "If something breaks" at the bottom.
 
 - **Who:** The operations team at head office.
 - **What is happening:** They see 5 agents in Sylhet, provider feed
-  health for Nagad and bKash, total shared cash, and a **bar chart of
-  shared cash per branch**. One agent — **AGENT-SYL-001 (Zindabazar)** —
-  is flagged "Liquidity warning".
+  health for Nagad, bKash, and Rocket, a **Provider Portfolio** panel
+  comparing float and alert density across providers, total shared cash,
+  and a **bar chart of shared cash per branch**. One agent —
+  **AGENT-SYL-001 (Zindabazar)** — is flagged "Liquidity warning".
 - **Solution:** Investigate that agent. Click **Open** next to
   AGENT-SYL-001. It takes you straight to the Liquidity page with the
   problem pre-filled.
@@ -83,13 +84,15 @@ You are now on **Liquidity → Can we serve?**
   answers: **✗ CANNOT SERVE — short by ৳60,000**. Rahim only has
   ৳20,000 of Nagad float.
 - **Solution:** Two things. First, click **Prompt shortfall alert for
-  operations** — this creates an evidence-backed alert for the ops team
-  (show that it says "Alert #N created"). Second — don't send the
-  customer away — find a nearby agent who can help. Go to the
-  **Find support** tab.
+  operations** — this creates an evidence-backed alert so head office
+  knows the branch is in trouble (show that it says "Alert #N created").
+  **The alert does not add float or rescue the customer** — it only
+  notifies ops. Second — don't send the customer away — find a nearby
+  agent who can help. Go to the **Find support** tab.
 
-Say: *"The system stopped a failed transaction before it happened, told
-operations, and now it will find help nearby."*
+Say: *"The system stopped a failed transaction before it happened,
+notified operations, and now we rescue the customer — that's the Find
+support workflow, not the Cases queue."*
 
 ### Step 3 — Agent-to-agent support (2 minutes) ← YOUR UNIQUE FEATURE
 
@@ -136,10 +139,18 @@ Click **Cases** in the top navigation.
 - **Who:** The operations team working through their queue.
 - **What is happening:** The shortfall alert from Step 2 is here, with
   severity, evidence, and a recommended next step written in plain
-  language.
-- **Solution:** Acknowledge it, assign an owner, resolve it. Bonus:
-  switch **Alert text language** (top of page) to **বাংলা** — the alert
-  text changes language. Field agents read Bangla, not English.
+  language. The card shows **rescue guidance**, not "waiting for
+  ownership" — ops was already notified in Step 2.
+- **Solution:** Show the **Find peer support** button (it pre-fills
+  Liquidity → Find support from the alert evidence). Say that rescue
+  already happened in Steps 2–3; here ops **acknowledges, assigns an
+  owner, and resolves** for the audit trail. Bonus: switch **Alert text
+  language** (top of page) to **বাংলা** — the alert text changes
+  language. Field agents read Bangla, not English.
+
+Say: *"The alert told ops there was a problem. Find support rescued the
+customer. Cases is where we close the loop with a full audit trail — no
+money moved automatically."*
 
 ### Step 6 — Unusual activity (1 minute)
 
@@ -187,6 +198,9 @@ python -m backend.app.data_loading.synthetic_loader --scenario NETWORK-001
 
 - **"Is this real money?"** — No. 100% synthetic data. The system never
   moves money; it only recommends, and a human approves everything.
+- **"Does resolving the alert add float?"** — No. Alerts notify ops;
+  **Find support** coordinates peer rescue. Balances only change when
+  you reload a synthetic scenario.
 - **"What's unique?"** — Agent-to-agent liquidity support: a shortage
   at one shop is solved by the network, ranked by data freshness and
   safety reserves, not just balance size.

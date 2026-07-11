@@ -16,11 +16,13 @@ from frontend.components.common import (
     alert_status_label,
     alert_type_label,
     localized_text,
+    navigate_to_peer_support,
     optional_text,
     provider_label,
     render_alert_card,
     render_empty_state,
     render_evidence_summary,
+    render_summary_metrics,
     render_technical_detail,
     run_api_call,
     safety_notice,
@@ -133,26 +135,25 @@ def _render_inbox(client: BackendClient) -> None:
         return
 
     inbox, detail_column = st.columns([1, 1.35], gap="large")
+    alert_ids = [int(alert["id"]) for alert in alerts]
+    if st.session_state.get("selected_alert_id") not in alert_ids:
+        st.session_state["selected_alert_id"] = alert_ids[0]
+
     with inbox:
         st.caption(f"{len(alerts)} work item(s)")
         for alert in alerts:
             render_alert_card(alert)
 
-        selected_id = st.selectbox(
-            "Open alert for full details",
-            [int(alert["id"]) for alert in alerts],
-            format_func=lambda alert_id: next(
-                (
-                    f"#{alert_id} · "
-                    f"{localized_text(item.get('title'), language=active_language())}"
-                    for item in alerts
-                    if int(item["id"]) == alert_id
-                ),
-                f"Alert #{alert_id}",
-            ),
-        )
+        if len(alerts) > 1:
+            st.selectbox(
+                "Switch alert",
+                alert_ids,
+                format_func=lambda alert_id: f"Alert #{alert_id}",
+                key="selected_alert_id",
+            )
 
     with detail_column:
+        selected_id = int(st.session_state["selected_alert_id"])
         detail = run_api_call(
             "Opening alert…",
             lambda: client.get_alert(int(selected_id)),
@@ -178,22 +179,16 @@ def _render_alert_detail(
         f"{alert_type_label(detail.get('alert_type'))}"
     )
 
-    meta = st.columns(4)
-    meta[0].metric(
-        "Priority",
-        severity_label(detail.get("severity")),
-    )
-    meta[1].metric(
-        "Status",
-        alert_status_label(detail.get("status")),
-    )
-    meta[2].metric(
-        "Affected agent",
-        agent_display_name(detail.get("agent_code")) or "—",
-    )
-    meta[3].metric(
-        "Owner",
-        detail.get("assigned_to") or "Unassigned",
+    render_summary_metrics(
+        [
+            ("Priority", severity_label(detail.get("severity"))),
+            ("Status", alert_status_label(detail.get("status"))),
+            (
+                "Affected agent",
+                agent_display_name(detail.get("agent_code")) or "—",
+            ),
+            ("Owner", detail.get("assigned_to") or "Unassigned"),
+        ]
     )
 
     st.markdown("#### Why this alert was prompted")
@@ -209,6 +204,21 @@ def _render_alert_detail(
         st.info(next_step)
     else:
         st.caption("No next step text was returned.")
+
+    if (
+        detail.get("alert_type") == "SERVICEABILITY_SHORTFALL"
+        and detail.get("status") != "RESOLVED"
+    ):
+        st.caption(
+            "Ops is notified — rescue the customer by finding peer support."
+        )
+        if st.button(
+            "Find peer support",
+            type="primary",
+            key=f"peer_support_{detail['id']}",
+        ):
+            navigate_to_peer_support(detail)
+            st.rerun()
 
     evidence, history = st.columns(2)
     with evidence:

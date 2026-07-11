@@ -40,13 +40,14 @@ from frontend.views.tools import render_anomalies, render_liquidity
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8000"
 
 MAIN_PAGES = {
-    "Dashboard": render_overview,
+    "Agent desk": render_agent_dashboard,
     "Liquidity": render_liquidity,
     "Anomalies": render_anomalies,
     "Cases": render_cases,
 }
 
-ADVANCED_PAGES = {
+# Stakeholder / role-filter views (agent-first ordering).
+STAKEHOLDER_PAGES = {
     "Agent desk": render_agent_dashboard,
     "Provider": render_provider_dashboard,
     "Operations": render_operations_dashboard,
@@ -55,12 +56,21 @@ ADVANCED_PAGES = {
     "Model checks": render_evaluation_dashboard,
 }
 
+# Network overview is reachable from Agent desk; not a primary nav tab.
+EXTRA_PAGES = {
+    "Network": render_overview,
+}
+
+ALL_PAGES = {**MAIN_PAGES, **EXTRA_PAGES}
+
 NAV_ITEMS = [
-    ("Dashboard", "📊"),
+    ("Agent desk", "👤"),
     ("Liquidity", "💵"),
     ("Anomalies", "🔍"),
     ("Cases", "📋"),
 ]
+
+DEFAULT_PAGE = "Agent desk"
 
 DB_OPTIONAL_PAGES = {"Model checks"}
 
@@ -102,7 +112,7 @@ def get_backend_client(base_url: str) -> BackendClient:
 def _render_bottom_nav() -> None:
     """Render four-tab Ops Center navigation."""
 
-    current_page = st.session_state.get("current_page", "Dashboard")
+    current_page = st.session_state.get("current_page", DEFAULT_PAGE)
 
     st.markdown('<div class="bottom-nav">', unsafe_allow_html=True)
     cols = st.columns(4)
@@ -218,7 +228,7 @@ st.session_state["language_label"] = language_label
 st.session_state["language_code"] = LANGUAGE_OPTIONS[language_label]
 st.session_state["_scenario_options"] = SCENARIO_OPTIONS
 
-page_name = st.session_state.get("current_page", "Dashboard")
+page_name = st.session_state.get("current_page", DEFAULT_PAGE)
 needs_database = page_name not in DB_OPTIONAL_PAGES
 
 if not api_ok:
@@ -254,17 +264,8 @@ if not database_ok and page_name in DB_OPTIONAL_PAGES:
         "live balances and alerts are unavailable."
     )
 
-if page_name in MAIN_PAGES:
-    MAIN_PAGES[page_name](backend_client)
+if page_name in ALL_PAGES:
+    ALL_PAGES[page_name](backend_client)
 else:
-    st.session_state["current_page"] = "Dashboard"
-    MAIN_PAGES["Dashboard"](backend_client)
-
-with st.expander("Advanced dashboards", expanded=False):
-    advanced_choice = st.selectbox(
-        "Open a detailed dashboard",
-        ["— pick one —", *ADVANCED_PAGES],
-        key="advanced_page_pick",
-    )
-    if advanced_choice != "— pick one —":
-        ADVANCED_PAGES[advanced_choice](backend_client)
+    st.session_state["current_page"] = DEFAULT_PAGE
+    MAIN_PAGES[DEFAULT_PAGE](backend_client)

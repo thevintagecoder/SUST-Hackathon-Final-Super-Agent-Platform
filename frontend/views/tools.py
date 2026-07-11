@@ -55,19 +55,32 @@ def render_liquidity(client: BackendClient) -> None:
     safety_notice()
     render_scenario_context()
 
-    tab_service, tab_network, tab_forecast = st.tabs(
-        [
-            "Can we serve?",
-            "Find support",
-            "Runway forecast",
-        ]
+    liquidity_tabs = [
+        ("service", "Can we serve?"),
+        ("network", "Find support"),
+        ("forecast", "Runway forecast"),
+    ]
+    tab_keys = [key for key, _ in liquidity_tabs]
+    tab_labels = [label for _, label in liquidity_tabs]
+    active_tab = st.session_state.get("liquidity_tab", "service")
+    if active_tab not in tab_keys:
+        active_tab = "service"
+    selected_label = st.radio(
+        "Liquidity section",
+        tab_labels,
+        index=tab_keys.index(active_tab),
+        horizontal=True,
+        label_visibility="collapsed",
     )
+    st.session_state["liquidity_tab"] = tab_keys[
+        tab_labels.index(selected_label)
+    ]
 
-    with tab_service:
+    if st.session_state["liquidity_tab"] == "service":
         _render_serviceability(client)
-    with tab_network:
+    elif st.session_state["liquidity_tab"] == "network":
         _render_network(client)
-    with tab_forecast:
+    else:
         _render_forecast(client)
 
 
