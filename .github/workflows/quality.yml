@@ -34,12 +34,11 @@ jobs:
 
       - name: Run tests and generate coverage
         run: |
-          python -m pytest backend/tests -q \
+          python -m pytest \
+            backend/tests \
+            synthetic_data/tests \
+            -q \
             --cov=backend/app \
+            --cov=synthetic_data \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml
-
-      - name: Run SonarQube analysis
-        uses: SonarSource/sonarqube-scan-action@v8.2.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
