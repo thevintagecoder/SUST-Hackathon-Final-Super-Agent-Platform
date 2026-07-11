@@ -9,6 +9,9 @@ from backend.app.db.connection import check_database_connection
 from backend.app.routers.agents import router as agents_router
 from backend.app.routers.liquidity import router as liquidity_router
 from backend.app.routers.network import router as network_router
+from backend.app.routers.support_requests import (
+    router as support_requests_router,
+)
 
 
 class HealthResponse(BaseModel):
@@ -40,6 +43,7 @@ app = FastAPI(
 app.include_router(agents_router)
 app.include_router(liquidity_router)
 app.include_router(network_router)
+app.include_router(support_requests_router)
 
 
 @app.get(
