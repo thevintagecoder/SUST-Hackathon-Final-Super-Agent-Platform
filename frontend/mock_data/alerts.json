@@ -1,0 +1,40 @@
+[
+  {
+    "id": 101,
+    "type": "liquidity_and_unusual_activity",
+    "severity": "high",
+    "status": "open",
+    "title": "BKASH_SIM liquidity pressure requires review",
+    "reason": "Estimated provider runway is below the warning threshold and repeated cash-in amounts increased during the last hour.",
+    "confidence": 0.82,
+    "uncertainty": "Confidence is reduced if the provider feed becomes delayed.",
+    "evidence": {
+      "repeated_amount": 5000.0,
+      "repeat_count": 8,
+      "velocity_ratio": 2.4,
+      "runway_hours": 3.27
+    },
+    "recommended_next_step": "Verify feed freshness and ask the assigned operations owner to review provider float requirements.",
+    "owner": "Sylhet Operations Desk",
+    "created_at": "2026-07-11T14:30:00Z"
+  },
+  {
+    "id": 102,
+    "type": "feed_freshness",
+    "severity": "medium",
+    "status": "open",
+    "title": "ROCKET_SIM feed delay may reduce forecast confidence",
+    "reason": "Provider position data has not refreshed within the expected window.",
+    "confidence": 0.58,
+    "uncertainty": "Runway estimates for delayed providers should be treated as provisional.",
+    "evidence": {
+      "repeated_amount": 0.0,
+      "repeat_count": 0,
+      "velocity_ratio": 1.0,
+      "runway_hours": 35.5
+    },
+    "recommended_next_step": "Verify provider feed status and contact operations if the delay continues.",
+    "owner": "Sylhet Operations Desk",
+    "created_at": "2026-07-11T14:45:00Z"
+  }
+]

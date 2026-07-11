@@ -1,0 +1,47 @@
+{
+  "agent_code": "AGENT-SYL-001",
+  "positions": [
+    {
+      "resource": "BKASH_SIM",
+      "current_balance": 8500.0,
+      "recent_net_outflow_per_hour": 2600.0,
+      "estimated_runway_hours": 3.27,
+      "warning_threshold_hours": 6.0,
+      "confidence": 0.82,
+      "freshness": "fresh",
+      "evidence": {
+        "window_hours": 4,
+        "sample_size": 34,
+        "volatility": 0.19
+      }
+    },
+    {
+      "resource": "NAGAD_SIM",
+      "current_balance": 64000.0,
+      "recent_net_outflow_per_hour": 900.0,
+      "estimated_runway_hours": 71.1,
+      "warning_threshold_hours": 6.0,
+      "confidence": 0.91,
+      "freshness": "fresh",
+      "evidence": {
+        "window_hours": 4,
+        "sample_size": 28,
+        "volatility": 0.08
+      }
+    },
+    {
+      "resource": "ROCKET_SIM",
+      "current_balance": 39000.0,
+      "recent_net_outflow_per_hour": 1100.0,
+      "estimated_runway_hours": 35.5,
+      "warning_threshold_hours": 6.0,
+      "confidence": 0.58,
+      "freshness": "delayed",
+      "evidence": {
+        "window_hours": 4,
+        "sample_size": 19,
+        "volatility": 0.14
+      }
+    }
+  ]
+}

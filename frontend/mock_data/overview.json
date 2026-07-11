@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-11T15:00:00Z",
+  "agent": {
+    "code": "AGENT-SYL-001",
+    "name": "Synthetic Zindabazar Outlet",
+    "area": "Sylhet"
+  },
+  "shared_cash": {
+    "amount": 42000.0,
+    "freshness": "fresh",
+    "as_of": "2026-07-11T14:58:00Z"
+  },
+  "providers": [
+    {
+      "code": "BKASH_SIM",
+      "balance": 8500.0,
+      "status": "pressure",
+      "freshness": "fresh"
+    },
+    {
+      "code": "NAGAD_SIM",
+      "balance": 64000.0,
+      "status": "healthy",
+      "freshness": "fresh"
+    },
+    {
+      "code": "ROCKET_SIM",
+      "balance": 39000.0,
+      "status": "healthy",
+      "freshness": "delayed"
+    }
+  ],
+  "open_alerts": 2,
+  "unacknowledged_alerts": 1
+}
