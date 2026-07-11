@@ -12,6 +12,9 @@ from backend.app.routers.network import router as network_router
 from backend.app.routers.support_requests import (
     router as support_requests_router,
 )
+from backend.app.routers.forecasts import (
+    router as forecasts_router,
+)
 
 
 class HealthResponse(BaseModel):
@@ -44,6 +47,7 @@ app.include_router(agents_router)
 app.include_router(liquidity_router)
 app.include_router(network_router)
 app.include_router(support_requests_router)
+app.include_router(forecasts_router)
 
 
 @app.get(
