@@ -1,0 +1,11 @@
+[run]
+relative_files = True
+source = backend/app
+branch = True
+
+[report]
+show_missing = True
+skip_empty = True
+
+[xml]
+output = coverage.xml

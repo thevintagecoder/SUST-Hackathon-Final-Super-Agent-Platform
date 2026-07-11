@@ -16,3 +16,12 @@ __pycache__/
 
 # Editor settings
 .vscode/
+
+
+# Python coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# SonarQube scanner working directory
+.scannerwork/

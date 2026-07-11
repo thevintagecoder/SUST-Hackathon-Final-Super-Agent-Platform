@@ -1,0 +1,47 @@
+name: Tests and SonarQube
+
+on:
+  push:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-analyze:
+    name: Test and analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Run tests and generate coverage
+        run: |
+          python -m pytest backend/tests -q \
+            --cov=backend/app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
+
+      - name: Run SonarQube analysis
+        uses: SonarSource/sonarqube-scan-action@v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
