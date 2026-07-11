@@ -38,18 +38,39 @@ Follow-up prompt:
 > I have done everything you have done till now. I have saved the token.
 > What do I do next?
 
+Follow-up prompt:
+
+> It is already created. What do I do next? I have edited the legacy
+> Markdown file as well.
+
+Follow-up prompt:
+
+> Here is the file. What changes do I have to make?
+>
+> Give me the exact file to replace. Also, this is what I have created
+> till now.
+
+The final follow-up included a screenshot of the current VS Code project
+state and the current contents of this prompt record.
+
 ## Guidance summary
 
-The repository will contain a `prompts` directory.
+The repository contains a `prompts` directory for development traceability.
 
 Each future AI-assisted commit will include a numbered Markdown prompt
-record containing the relevant user prompt, affected files, human review,
-validation, and analysis status.
+record containing:
 
-Existing commits created before the judging-panel instruction will be
-documented without rewriting published Git history.
+- the relevant user prompt;
+- the development goal;
+- the files affected;
+- human review or modifications;
+- validation performed;
+- the analysis status at commit time.
 
-The project will use GitHub Actions to:
+Existing commits created before the judging-panel instruction are
+documented separately without rewriting published Git history.
+
+The project uses GitHub Actions to:
 
 1. install Python 3.12;
 2. install project dependencies;
@@ -81,26 +102,32 @@ Testing and SonarQube configuration:
 The prompt-tracking and analysis process was reviewed before committing.
 
 Existing published commits were preserved instead of rewriting Git
-history.
+history because collaborators may already have pulled those commits.
 
 The SonarQube token was stored as a GitHub Actions repository secret named
 `SONAR_TOKEN`. The token value was not placed in any repository file.
+
+The SonarQube project key and organization key were stored in
+`sonar-project.properties`. These are project identifiers, not secret
+credentials.
 
 No passwords, database credentials, API tokens, private environment
 values, or real customer information were included in the prompt records.
 
 ## Validation performed
 
-Before committing:
+Local validation required before committing:
 
-- inspected all prompt-record files;
-- ran `git diff --check`;
-- ran the complete pytest suite;
-- generated `coverage.xml`;
-- verified that `.env` was ignored by Git;
-- verified that `coverage.xml` was ignored by Git;
-- checked that no secret token value was stored in repository files;
-- reviewed the files staged for the commit.
+- inspect all prompt-record files;
+- run `git diff --check`;
+- run the complete pytest suite;
+- generate `coverage.xml`;
+- verify that `.env` is ignored by Git;
+- verify that `.coverage` is ignored by Git;
+- verify that `coverage.xml` is ignored by Git;
+- confirm that no placeholder remains in `sonar-project.properties`;
+- confirm that no secret token value is stored in repository files;
+- review every file staged for the commit.
 
 Post-push validation:
 
@@ -108,5 +135,5 @@ Post-push validation:
 - SonarQube analysis: pending at commit time;
 - Quality Gate: pending at commit time.
 
-The authoritative post-push results are retained by GitHub Actions and
-SonarQube Cloud and are associated with the resulting Git commit.
+The authoritative post-push results will be retained by GitHub Actions and
+SonarQube Cloud and associated with the resulting Git commit.
