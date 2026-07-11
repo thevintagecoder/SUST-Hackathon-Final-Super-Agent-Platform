@@ -1,4 +1,6 @@
-"""SQLAlchemy engine and database-session configuration."""
+"""SQLAlchemy engine and request-scoped session configuration."""
+
+from collections.abc import Generator
 
 from sqlalchemy import URL, create_engine
 from sqlalchemy.engine import Engine
@@ -10,7 +12,7 @@ from backend.app.core.config import Settings, get_settings
 def build_database_url(
     settings: Settings | None = None,
 ) -> URL:
-    """Build a PostgreSQL URL without manually joining credentials."""
+    """Build the PostgreSQL connection URL from settings."""
 
     active_settings = settings or get_settings()
 
@@ -37,3 +39,14 @@ SessionLocal = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Provide one SQLAlchemy Session for one API request."""
+
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
