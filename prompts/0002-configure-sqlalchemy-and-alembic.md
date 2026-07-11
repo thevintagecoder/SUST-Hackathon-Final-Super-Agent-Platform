@@ -20,6 +20,22 @@ ChatGPT
 > instructions and data of the prompt.md again from now on. I ensured the
 > connection from FastAPI and PostgreSQL. What do we do next?
 
+Follow-up prompt:
+
+> This is the issue I found:
+>
+> The test suite passed with 9 tests, but overall coverage was 69%.
+> `backend/app/db/connection.py` had 24% coverage,
+> `backend/app/db/session.py` had 0% coverage, and
+> `backend/app/main.py` had one uncovered line.
+>
+> Pytest also reported a Starlette deprecation warning recommending
+> `httpx2` instead of `httpx`.
+
+Follow-up prompt:
+
+> Why does SonarQube show that the Quality Gate failed?
+
 ## Guidance summary
 
 The next implementation step introduces the ORM and migration layers
@@ -62,6 +78,13 @@ Testing and documentation:
 - `README.md`
 - `prompts/0002-configure-sqlalchemy-and-alembic.md`
 
+Coverage remediation:
+
+- `backend/tests/test_database_connection.py`
+- `backend/tests/test_database_session.py`
+- `backend/tests/test_database_health.py`
+- `backend/requirements.txt`
+
 ## Human review and modifications
 
 The implementation uses local PostgreSQL installed through Homebrew.
@@ -74,6 +97,23 @@ GitHub Actions workflow, or prompt record.
 Only one real domain table is introduced in this commit.
 
 The generated Alembic migration must be inspected before it is applied.
+
+The SonarQube analysis completed successfully, but the Quality Gate
+reported one failed condition. The dashboard showed 69.1% overall
+coverage, 0.0% duplication, and two open issues.
+
+The exact failed Quality Gate condition will be reviewed before changing
+tests, source code, or SonarQube configuration. The Quality Gate will not
+be weakened merely to obtain a passing result.
+
+The failed Quality Gate was treated as a quality signal rather than
+weakened or disabled.
+
+Focused tests were added for the SQLAlchemy URL builder, session factory,
+low-level Psycopg connection behavior, command-line connection checker,
+and the missing database-health API branch.
+
+The deprecated `httpx` testing dependency was replaced w
 
 ## Validation required before committing
 

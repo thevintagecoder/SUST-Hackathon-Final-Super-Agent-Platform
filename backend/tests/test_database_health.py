@@ -29,6 +29,24 @@ def test_database_health_returns_ok(
     }
 
 
+def test_database_health_returns_503_for_failed_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Return 503 when the health query has an unexpected result."""
+
+    monkeypatch.setattr(
+        "backend.app.main.check_database_connection",
+        lambda: False,
+    )
+
+    response = client.get("/health/database")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Database health check failed."
+    }
+
+
 def test_database_health_returns_503_when_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
