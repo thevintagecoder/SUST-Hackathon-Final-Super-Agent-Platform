@@ -24,6 +24,10 @@ from backend.app.schemas.dashboard import (
     DashboardAlertItem,
     ProviderBalanceCard,
     SharedCashCard,
+    OperationsAgentRiskRow,
+    OperationsAlertItem,
+    OperationsDashboardResponse,
+    OperationsSummaryResponse,
 )
 
 
@@ -439,5 +443,376 @@ def get_agent_dashboard(
         scenario_id=scenario_id,
         generated_at=datetime.now(
             UTC
+        ),
+    )
+
+def normalize_dashboard_datetime(
+    value: datetime,
+) -> datetime:
+    """Return a timezone-aware UTC datetime."""
+
+    if value.tzinfo is None:
+        return value.replace(
+            tzinfo=UTC,
+        )
+
+    return value.astimezone(
+        UTC,
+    )
+
+
+def get_operations_dashboard(
+    *,
+    db: Session,
+    scenario_id: str | None = None,
+    recent_alert_limit: int = 10,
+) -> OperationsDashboardResponse:
+    """Build a cross-Agent operational overview."""
+
+    agents = list(
+        db.scalars(
+            select(Agent).order_by(
+                Agent.code
+            )
+        ).all()
+    )
+
+    agent_ids = [
+        agent.id
+        for agent in agents
+    ]
+
+    positions: list[AgentPosition] = []
+    provider_balances: list[
+        ProviderBalance
+    ] = []
+
+    if agent_ids:
+        positions = list(
+            db.scalars(
+                select(AgentPosition).where(
+                    AgentPosition.agent_id.in_(
+                        agent_ids
+                    )
+                )
+            ).all()
+        )
+
+        provider_balances = list(
+            db.scalars(
+                select(ProviderBalance).where(
+                    ProviderBalance.agent_id.in_(
+                        agent_ids
+                    )
+                )
+            ).all()
+        )
+
+    alert_statement = (
+        select(Alert)
+        .where(
+            Alert.status != "RESOLVED"
+        )
+        .order_by(
+            Alert.created_at.desc(),
+            Alert.id.desc(),
+        )
+    )
+
+    if scenario_id is not None:
+        alert_statement = (
+            alert_statement.where(
+                Alert.scenario_id
+                == scenario_id
+            )
+        )
+
+    active_alerts = list(
+        db.scalars(
+            alert_statement
+        ).all()
+    )
+
+    positions_by_agent = {
+        position.agent_id: position
+        for position in positions
+    }
+
+    balances_by_agent: dict[
+        int,
+        list[ProviderBalance],
+    ] = {}
+
+    for balance in provider_balances:
+        balances_by_agent.setdefault(
+            balance.agent_id,
+            [],
+        ).append(
+            balance
+        )
+
+    alerts_by_agent: dict[
+        int,
+        list[Alert],
+    ] = {}
+
+    for alert in active_alerts:
+        alerts_by_agent.setdefault(
+            alert.agent_id,
+            [],
+        ).append(
+            alert
+        )
+
+    provider_ids = {
+        alert.provider_id
+        for alert in active_alerts
+        if alert.provider_id is not None
+    }
+
+    provider_codes: dict[int, str] = {}
+
+    if provider_ids:
+        provider_codes = {
+            provider_id: provider_code
+            for provider_id, provider_code
+            in db.execute(
+                select(
+                    Provider.id,
+                    Provider.code,
+                ).where(
+                    Provider.id.in_(
+                        provider_ids
+                    )
+                )
+            ).all()
+        }
+
+    agent_codes = {
+        agent.id: agent.code
+        for agent in agents
+    }
+
+    agent_risks: list[
+        OperationsAgentRiskRow
+    ] = []
+
+    for agent in agents:
+        position = positions_by_agent.get(
+            agent.id
+        )
+
+        agent_balances = (
+            balances_by_agent.get(
+                agent.id,
+                [],
+            )
+        )
+
+        agent_alerts = (
+            alerts_by_agent.get(
+                agent.id,
+                [],
+            )
+        )
+
+        stale_provider_count = sum(
+            (
+                balance.freshness_state
+                or "missing"
+            )
+            != "fresh"
+            for balance in agent_balances
+        )
+
+        agent_risks.append(
+            OperationsAgentRiskRow(
+                agent_code=agent.code,
+                agent_name=agent.name,
+                area=agent.area,
+                is_active=agent.is_active,
+                shared_cash=(
+                    position.shared_cash
+                    if position is not None
+                    else None
+                ),
+                shared_cash_as_of=(
+                    position.as_of
+                    if position is not None
+                    else None
+                ),
+                stale_provider_count=(
+                    stale_provider_count
+                ),
+                active_alert_count=(
+                    len(agent_alerts)
+                ),
+                highest_active_severity=(
+                    highest_severity(
+                        agent_alerts
+                    )
+                ),
+                human_review_required=any(
+                    alert
+                    .human_review_required
+                    for alert in agent_alerts
+                ),
+            )
+        )
+
+    agent_risks.sort(
+        key=lambda row: (
+            -SEVERITY_ORDER.get(
+                row.highest_active_severity
+                or "",
+                0,
+            ),
+            -row.active_alert_count,
+            row.agent_code,
+        )
+    )
+
+    recent_alerts = [
+        OperationsAlertItem(
+            id=alert.id,
+            agent_code=agent_codes[
+                alert.agent_id
+            ],
+            provider_code=(
+                provider_codes.get(
+                    alert.provider_id
+                )
+                if alert.provider_id
+                is not None
+                else None
+            ),
+            alert_type=alert.alert_type,
+            severity=alert.severity,
+            status=alert.status,
+            scenario_id=alert.scenario_id,
+            title=build_alert_title(
+                alert
+            ),
+            confidence=alert.confidence,
+            freshness_state=(
+                alert.freshness_state
+            ),
+            assigned_to=alert.assigned_to,
+            created_at=alert.created_at,
+            human_review_required=(
+                alert.human_review_required
+            ),
+            automatic_action_taken=(
+                alert.automatic_action_taken
+            ),
+        )
+        for alert in active_alerts[
+            :recent_alert_limit
+        ]
+    ]
+
+    stale_provider_balance_count = sum(
+        (
+            balance.freshness_state
+            or "missing"
+        )
+        != "fresh"
+        for balance in provider_balances
+    )
+
+    update_candidates = [
+        normalize_dashboard_datetime(
+            position.as_of
+        )
+        for position in positions
+    ]
+
+    update_candidates.extend(
+        normalize_dashboard_datetime(
+            balance.last_update_at
+        )
+        for balance in provider_balances
+    )
+
+    update_candidates.extend(
+        normalize_dashboard_datetime(
+            alert.updated_at
+        )
+        for alert in active_alerts
+    )
+
+    last_updated_at = (
+        max(
+            update_candidates
+        )
+        if update_candidates
+        else None
+    )
+
+    return OperationsDashboardResponse(
+        summary=OperationsSummaryResponse(
+            total_agents=len(
+                agents
+            ),
+            active_agents=sum(
+                agent.is_active
+                for agent in agents
+            ),
+            provider_balance_count=len(
+                provider_balances
+            ),
+            stale_provider_balance_count=(
+                stale_provider_balance_count
+            ),
+            active_alert_count=len(
+                active_alerts
+            ),
+            open_alert_count=sum(
+                alert.status == "OPEN"
+                for alert in active_alerts
+            ),
+            escalated_alert_count=sum(
+                alert.status == "ESCALATED"
+                for alert in active_alerts
+            ),
+            unassigned_alert_count=sum(
+                alert.assigned_to is None
+                for alert in active_alerts
+            ),
+            high_or_critical_alert_count=sum(
+                alert.severity
+                in {
+                    "HIGH",
+                    "CRITICAL",
+                }
+                for alert in active_alerts
+            ),
+            human_review_required_count=sum(
+                alert.human_review_required
+                for alert in active_alerts
+            ),
+            severity_counts=(
+                build_severity_counts(
+                    active_alerts
+                )
+            ),
+            alert_type_counts=(
+                build_alert_type_counts(
+                    active_alerts
+                )
+            ),
+            automatic_action_taken=False,
+        ),
+        agent_risks=agent_risks,
+        recent_alerts=recent_alerts,
+        scenario_id=scenario_id,
+        last_updated_at=last_updated_at,
+        generated_at=datetime.now(
+            UTC
+        ),
+        synthetic_data_notice=(
+            "Synthetic demonstration data only. "
+            "Human review is required before any "
+            "operational decision."
         ),
     )
