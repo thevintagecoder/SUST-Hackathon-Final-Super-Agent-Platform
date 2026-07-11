@@ -68,3 +68,50 @@ http://127.0.0.1:8000/redoc
 ```bash
 python -m pytest backend/tests -q
 ```
+
+## Local PostgreSQL
+
+PostgreSQL runs directly on macOS through Homebrew. Docker is not
+required for local development.
+
+Locate the PostgreSQL commands:
+
+```bash
+PG_BIN="$(brew --prefix postgresql@17)/bin"
+```
+
+Start PostgreSQL:
+
+```bash
+brew services start postgresql@17
+```
+
+Check its status:
+
+```bash
+brew services list
+```
+
+Check whether it accepts connections:
+
+```bash
+"$PG_BIN/pg_isready"
+```
+
+Verify the real Python connection:
+
+```bash
+python -m backend.app.db.connection
+```
+
+Stop PostgreSQL:
+
+```bash
+brew services stop postgresql@17
+```
+
+Restart PostgreSQL:
+
+```bash
+brew services start postgresql@17
+```

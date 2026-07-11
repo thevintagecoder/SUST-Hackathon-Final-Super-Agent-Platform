@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
 pydantic-settings
+psycopg[binary]
 pytest
 httpx

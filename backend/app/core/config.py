@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,15 @@ class Settings(BaseSettings):
     ] = "development"
     version: str = "0.1.0"
     debug: bool = False
+
+    database_host: str = "127.0.0.1"
+    database_port: int = 5432
+    database_name: str = "super_agent"
+    database_user: str = "super_agent_user"
+    database_password: SecretStr = SecretStr(
+        "local-development-only"
+    )
+    database_connect_timeout_seconds: int = 3
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
