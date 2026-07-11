@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,9 +25,10 @@ from backend.app.models import (
 DEFAULT_INPUT_DIRECTORY = Path(
     "synthetic_data/generated/demo"
 )
-DEFAULT_SCENARIO_ID = "REPEATED-001"
+DEFAULT_SCENARIO_ID = "NETWORK-001"
 
 REQUIRED_FILES = (
+    "agents.csv",
     "initial_positions.csv",
     "provider_balances.csv",
     "provider_feed_status.csv",
@@ -48,13 +48,27 @@ class LoadSummary:
     """Describe the result of one scenario load."""
 
     scenario_id: str
-    agent_created: bool
+    agents_created: int
+    agents_updated: int
     providers_created: int
-    position_created: bool
+    positions_created: int
+    positions_updated: int
     balances_created: int
     balances_updated: int
     transactions_inserted: int
     transactions_skipped: int
+
+    @property
+    def agent_created(self) -> bool:
+        """Preserve compatibility with earlier single-Agent tests."""
+
+        return self.agents_created > 0
+
+    @property
+    def position_created(self) -> bool:
+        """Preserve compatibility with earlier single-Agent tests."""
+
+        return self.positions_created > 0
 
 
 def read_csv_rows(
@@ -122,7 +136,7 @@ def parse_decimal(
     *,
     allow_zero: bool,
 ) -> Decimal:
-    """Parse and validate one generated money value."""
+    """Parse and validate one generated monetary value."""
 
     try:
         parsed_value = Decimal(value)
@@ -131,10 +145,11 @@ def parse_decimal(
             f"Invalid monetary value: {value}"
         ) from exc
 
-    if allow_zero:
-        valid = parsed_value >= 0
-    else:
-        valid = parsed_value > 0
+    valid = (
+        parsed_value >= 0
+        if allow_zero
+        else parsed_value > 0
+    )
 
     if not valid:
         raise ValueError(
@@ -142,6 +157,22 @@ def parse_decimal(
         )
 
     return parsed_value
+
+
+def parse_optional_decimal(
+    value: str,
+) -> Decimal | None:
+    """Parse an optional decimal such as a coordinate."""
+
+    if not value:
+        return None
+
+    try:
+        return Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError(
+            f"Invalid decimal value: {value}"
+        ) from exc
 
 
 def parse_boolean(
@@ -175,11 +206,37 @@ def rows_for_scenario(
     ]
 
 
+def index_agent_rows(
+    rows: list[dict[str, str]],
+) -> dict[str, dict[str, str]]:
+    """Index unique generated Agent rows by code."""
+
+    indexed_rows: dict[
+        str,
+        dict[str, str],
+    ] = {}
+
+    for row in rows:
+        agent_code = row["agent_code"]
+
+        if agent_code in indexed_rows:
+            raise ValueError(
+                "Duplicate Agent definition found: "
+                f"{agent_code}"
+            )
+
+        indexed_rows[agent_code] = row
+
+    return indexed_rows
+
+
 def get_or_create_agent(
     db: Session,
-    agent_code: str,
+    agent_row: dict[str, str],
 ) -> tuple[Agent, bool]:
-    """Return the synthetic Agent, creating it when absent."""
+    """Create or update one synthetic Agent."""
+
+    agent_code = agent_row["agent_code"]
 
     agent = db.scalar(
         select(Agent).where(
@@ -187,13 +244,32 @@ def get_or_create_agent(
         )
     )
 
+    latitude = parse_optional_decimal(
+        agent_row["latitude"]
+    )
+    longitude = parse_optional_decimal(
+        agent_row["longitude"]
+    )
+    is_active = parse_boolean(
+        agent_row["is_active"]
+    )
+
     if agent is not None:
+        agent.name = agent_row["name"]
+        agent.area = agent_row["area"]
+        agent.latitude = latitude
+        agent.longitude = longitude
+        agent.is_active = is_active
+
         return agent, False
 
     agent = Agent(
         code=agent_code,
-        name="Synthetic Sylhet Agent",
-        area="Sylhet",
+        name=agent_row["name"],
+        area=agent_row["area"],
+        latitude=latitude,
+        longitude=longitude,
+        is_active=is_active,
     )
 
     db.add(agent)
@@ -243,6 +319,13 @@ def load_synthetic_scenario(
 
     validate_input_directory(input_directory)
 
+    all_agent_rows = read_csv_rows(
+        input_directory / "agents.csv"
+    )
+    agent_definition_by_code = (
+        index_agent_rows(all_agent_rows)
+    )
+
     initial_position_rows = rows_for_scenario(
         read_csv_rows(
             input_directory
@@ -272,10 +355,11 @@ def load_synthetic_scenario(
         scenario_id,
     )
 
-    if len(initial_position_rows) != 1:
+    if not initial_position_rows:
         raise ValueError(
-            "Expected exactly one initial position "
-            f"for scenario {scenario_id}."
+            "Expected exactly one initial position for a "
+            "single-Agent scenario or multiple positions for "
+            f"a network scenario; none found for {scenario_id}."
         )
 
     if not provider_balance_rows:
@@ -290,99 +374,250 @@ def load_synthetic_scenario(
             f"{scenario_id}."
         )
 
-    feed_state_by_provider = {
-        row["provider_code"]: row
-        for row in provider_feed_rows
+    position_row_by_agent: dict[
+        str,
+        dict[str, str],
+    ] = {}
+
+    for row in initial_position_rows:
+        agent_code = row["agent_code"]
+
+        if agent_code in position_row_by_agent:
+            raise ValueError(
+                "Duplicate initial position found for "
+                f"{agent_code} in {scenario_id}."
+            )
+
+        position_row_by_agent[agent_code] = row
+
+    scenario_agent_codes = set(
+        position_row_by_agent
+    )
+
+    for agent_code in scenario_agent_codes:
+        if agent_code not in agent_definition_by_code:
+            raise ValueError(
+                "Missing Agent definition for "
+                f"{agent_code}."
+            )
+
+    expected_balance_keys = {
+        (
+            agent_code,
+            provider_code,
+        )
+        for agent_code in scenario_agent_codes
+        for provider_code in PROVIDER_NAMES
     }
 
-    position_row = initial_position_rows[0]
-    agent_code = position_row["agent_code"]
+    actual_balance_keys: set[
+        tuple[str, str]
+    ] = set()
 
+    for row in provider_balance_rows:
+        key = (
+            row["agent_code"],
+            row["provider_code"],
+        )
+
+        if key in actual_balance_keys:
+            raise ValueError(
+                "Duplicate provider balance found for "
+                f"{key[0]} and {key[1]}."
+            )
+
+        actual_balance_keys.add(key)
+
+    if actual_balance_keys != expected_balance_keys:
+        missing_keys = (
+            expected_balance_keys
+            - actual_balance_keys
+        )
+        extra_keys = (
+            actual_balance_keys
+            - expected_balance_keys
+        )
+
+        raise ValueError(
+            "Provider-balance coverage mismatch. "
+            f"Missing: {sorted(missing_keys)}. "
+            f"Unexpected: {sorted(extra_keys)}."
+        )
+
+    feed_row_by_key: dict[
+        tuple[str, str],
+        dict[str, str],
+    ] = {}
+
+    for row in provider_feed_rows:
+        key = (
+            row["agent_code"],
+            row["provider_code"],
+        )
+
+        if key in feed_row_by_key:
+            raise ValueError(
+                "Duplicate provider-feed row found for "
+                f"{key[0]} and {key[1]}."
+            )
+
+        feed_row_by_key[key] = row
+
+    if set(feed_row_by_key) != expected_balance_keys:
+        raise ValueError(
+            "Provider-feed rows do not cover every "
+            "Agent-provider balance."
+        )
+
+    agents_created = 0
+    agents_updated = 0
     providers_created = 0
+    positions_created = 0
+    positions_updated = 0
     balances_created = 0
     balances_updated = 0
     transactions_inserted = 0
     transactions_skipped = 0
 
     try:
-        agent, agent_created = get_or_create_agent(
-            db,
-            agent_code,
-        )
+        agent_by_code: dict[str, Agent] = {}
 
-        provider_by_code: dict[str, Provider] = {}
+        for agent_code in sorted(
+            scenario_agent_codes
+        ):
+            agent, created = get_or_create_agent(
+                db=db,
+                agent_row=(
+                    agent_definition_by_code[
+                        agent_code
+                    ]
+                ),
+            )
 
-        for balance_row in provider_balance_rows:
-            provider_code = balance_row[
-                "provider_code"
-            ]
+            agent_by_code[agent_code] = agent
 
-            provider, provider_created = (
+            if created:
+                agents_created += 1
+            else:
+                agents_updated += 1
+
+        provider_by_code: dict[
+            str,
+            Provider,
+        ] = {}
+
+        for provider_code in sorted(
+            PROVIDER_NAMES
+        ):
+            provider, created = (
                 get_or_create_provider(
-                    db,
-                    provider_code,
+                    db=db,
+                    provider_code=provider_code,
                 )
             )
 
-            provider_by_code[provider_code] = provider
+            provider_by_code[
+                provider_code
+            ] = provider
 
-            if provider_created:
+            if created:
                 providers_created += 1
 
-        position = db.scalar(
-            select(AgentPosition).where(
-                AgentPosition.agent_id == agent.id
+        for agent_code in sorted(
+            scenario_agent_codes
+        ):
+            agent = agent_by_code[
+                agent_code
+            ]
+            position_row = (
+                position_row_by_agent[
+                    agent_code
+                ]
             )
-        )
 
-        position_created = position is None
-
-        if position is None:
-            position = AgentPosition(
-                agent_id=agent.id,
-                shared_cash=parse_decimal(
-                    position_row["shared_cash"],
-                    allow_zero=True,
-                ),
-                as_of=parse_datetime(
-                    position_row["as_of"]
-                ),
+            position = db.scalar(
+                select(AgentPosition).where(
+                    AgentPosition.agent_id
+                    == agent.id
+                )
             )
-            db.add(position)
-        else:
-            position.shared_cash = parse_decimal(
+
+            shared_cash = parse_decimal(
                 position_row["shared_cash"],
                 allow_zero=True,
             )
-            position.as_of = parse_datetime(
+            as_of = parse_datetime(
                 position_row["as_of"]
             )
 
+            if position is None:
+                position = AgentPosition(
+                    agent_id=agent.id,
+                    shared_cash=shared_cash,
+                    as_of=as_of,
+                )
+                db.add(position)
+                positions_created += 1
+            else:
+                position.shared_cash = shared_cash
+                position.as_of = as_of
+                positions_updated += 1
+
         for balance_row in provider_balance_rows:
+            agent_code = balance_row[
+                "agent_code"
+            ]
             provider_code = balance_row[
                 "provider_code"
             ]
-            provider = provider_by_code[
-                provider_code
-            ]
 
-            feed_row = feed_state_by_provider.get(
+            agent = agent_by_code.get(
+                agent_code
+            )
+            provider = provider_by_code.get(
                 provider_code
             )
 
-            if feed_row is None:
+            if agent is None:
                 raise ValueError(
-                    "Missing provider-feed row for "
-                    f"{provider_code}."
+                    "Provider balance references an "
+                    f"unknown Agent: {agent_code}"
                 )
+
+            if provider is None:
+                raise ValueError(
+                    "Provider balance references an "
+                    f"unknown provider: {provider_code}"
+                )
+
+            feed_key = (
+                agent_code,
+                provider_code,
+            )
+            feed_row = feed_row_by_key[
+                feed_key
+            ]
 
             if (
                 feed_row["freshness_state"]
-                != balance_row["freshness_state"]
+                != balance_row[
+                    "freshness_state"
+                ]
             ):
                 raise ValueError(
                     "Provider freshness mismatch for "
-                    f"{provider_code}."
+                    f"{agent_code} and {provider_code}."
+                )
+
+            if (
+                feed_row["last_update_at"]
+                != balance_row[
+                    "last_update_at"
+                ]
+            ):
+                raise ValueError(
+                    "Provider update-time mismatch for "
+                    f"{agent_code} and {provider_code}."
                 )
 
             balance = db.scalar(
@@ -395,11 +630,15 @@ def load_synthetic_scenario(
             )
 
             electronic_balance = parse_decimal(
-                balance_row["electronic_balance"],
+                balance_row[
+                    "electronic_balance"
+                ],
                 allow_zero=True,
             )
             last_update_at = parse_datetime(
-                balance_row["last_update_at"]
+                balance_row[
+                    "last_update_at"
+                ]
             )
             freshness_state = balance_row[
                 "freshness_state"
@@ -412,8 +651,12 @@ def load_synthetic_scenario(
                     electronic_balance=(
                         electronic_balance
                     ),
-                    last_update_at=last_update_at,
-                    freshness_state=freshness_state,
+                    last_update_at=(
+                        last_update_at
+                    ),
+                    freshness_state=(
+                        freshness_state
+                    ),
                 )
                 db.add(balance)
                 balances_created += 1
@@ -436,7 +679,9 @@ def load_synthetic_scenario(
 
         existing_external_ids = set(
             db.scalars(
-                select(Transaction.external_id).where(
+                select(
+                    Transaction.external_id
+                ).where(
                     Transaction.external_id.in_(
                         external_ids
                     )
@@ -453,27 +698,31 @@ def load_synthetic_scenario(
                 transactions_skipped += 1
                 continue
 
+            agent_code = transaction_row[
+                "agent_code"
+            ]
             provider_code = transaction_row[
                 "provider_code"
             ]
 
+            agent = agent_by_code.get(
+                agent_code
+            )
             provider = provider_by_code.get(
                 provider_code
             )
 
-            if provider is None:
-                provider, provider_created = (
-                    get_or_create_provider(
-                        db,
-                        provider_code,
-                    )
+            if agent is None:
+                raise ValueError(
+                    "Transaction references an unknown "
+                    f"scenario Agent: {agent_code}"
                 )
-                provider_by_code[
-                    provider_code
-                ] = provider
 
-                if provider_created:
-                    providers_created += 1
+            if provider is None:
+                raise ValueError(
+                    "Transaction references an unknown "
+                    f"provider: {provider_code}"
+                )
 
             transaction = Transaction(
                 external_id=external_id,
@@ -487,21 +736,29 @@ def load_synthetic_scenario(
                         "synthetic_customer_id"
                     ]
                 ),
-                transaction_type=transaction_row[
-                    "transaction_type"
-                ],
+                transaction_type=(
+                    transaction_row[
+                        "transaction_type"
+                    ]
+                ),
                 amount=parse_decimal(
                     transaction_row["amount"],
                     allow_zero=False,
                 ),
                 occurred_at=parse_datetime(
-                    transaction_row["occurred_at"]
-                ),
-                status=transaction_row["status"],
-                anomaly_expected=parse_boolean(
                     transaction_row[
-                        "anomaly_expected"
+                        "occurred_at"
                     ]
+                ),
+                status=transaction_row[
+                    "status"
+                ],
+                anomaly_expected=(
+                    parse_boolean(
+                        transaction_row[
+                            "anomaly_expected"
+                        ]
+                    )
                 ),
                 anomaly_category=(
                     transaction_row[
@@ -529,15 +786,19 @@ def load_synthetic_scenario(
 
     return LoadSummary(
         scenario_id=scenario_id,
-        agent_created=agent_created,
+        agents_created=agents_created,
+        agents_updated=agents_updated,
         providers_created=providers_created,
-        position_created=position_created,
+        positions_created=positions_created,
+        positions_updated=positions_updated,
         balances_created=balances_created,
         balances_updated=balances_updated,
         transactions_inserted=(
             transactions_inserted
         ),
-        transactions_skipped=transactions_skipped,
+        transactions_skipped=(
+            transactions_skipped
+        ),
     )
 
 
@@ -546,19 +807,31 @@ def print_summary(
 ) -> None:
     """Print a readable loader result."""
 
-    print("Synthetic scenario loaded successfully.")
-    print(f"Scenario: {summary.scenario_id}")
     print(
-        "Agent created: "
-        f"{summary.agent_created}"
+        "Synthetic scenario loaded successfully."
+    )
+    print(
+        f"Scenario: {summary.scenario_id}"
+    )
+    print(
+        "Agents created: "
+        f"{summary.agents_created}"
+    )
+    print(
+        "Agents updated: "
+        f"{summary.agents_updated}"
     )
     print(
         "Providers created: "
         f"{summary.providers_created}"
     )
     print(
-        "Position created: "
-        f"{summary.position_created}"
+        "Positions created: "
+        f"{summary.positions_created}"
+    )
+    print(
+        "Positions updated: "
+        f"{summary.positions_updated}"
     )
     print(
         "Balances created: "

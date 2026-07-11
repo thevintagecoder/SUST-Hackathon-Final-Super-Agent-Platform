@@ -24,6 +24,10 @@ ChatGPT
 > Give me the steps to add `agents.csv`, create four synthetic Agents,
 > and introduce the `NETWORK-001` scenario.
 
+> Update the synthetic loader to read `agents.csv`, load four Agents,
+> four shared-cash positions, twelve provider balances, all NETWORK-001
+> transactions, and preserve idempotence.
+
 ## Guidance summary
 
 This feature is implemented incrementally.
@@ -63,6 +67,25 @@ preferred fresh candidate, and the stale candidate.
 The existing loader is not yet used for NETWORK-001 because it currently
 expects one Agent per scenario. Multi-Agent loader support is deferred to
 the next increment.
+
+The synthetic loader now supports both the previous single-Agent
+scenarios and the new multi-Agent NETWORK-001 scenario.
+
+For every selected scenario, it:
+
+1. reads Agent definitions from `agents.csv`;
+2. creates or updates only the Agents participating in that scenario;
+3. stores synthetic latitude and longitude;
+4. creates or updates one shared-cash position per Agent;
+5. validates that every Agent has all three provider balances;
+6. validates feed freshness and update-time consistency;
+7. creates or updates every Agent-provider balance;
+8. inserts only transactions whose external IDs do not already exist;
+9. safely rolls back the database transaction when validation fails.
+
+Loading NETWORK-001 creates four Agent positions, twelve provider
+balances, and thirty-two scenario transactions. Running it again updates
+current state but inserts no duplicate transactions.
 
 ## Files affected in this increment
 

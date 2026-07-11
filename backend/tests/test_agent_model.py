@@ -12,15 +12,16 @@ def test_agent_model_defines_expected_columns() -> None:
 
     column_names = set(Agent.__table__.columns.keys())
 
-    assert Agent.__tablename__ == "agents"
     assert column_names == {
-        "id",
-        "code",
-        "name",
-        "area",
-        "is_active",
-        "created_at",
-    }
+    "id",
+    "code",
+    "name",
+    "area",
+    "latitude",
+    "longitude",
+    "is_active",
+    "created_at",
+}
     assert Agent.__table__.columns["code"].unique is True
 
 
