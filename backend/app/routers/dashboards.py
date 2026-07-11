@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session
 from backend.app.db.session import get_db
 from backend.app.schemas.dashboard import (
     AgentDashboardResponse,
+    ManagementDashboardResponse,
     OperationsDashboardResponse,
     ProviderDashboardResponse,
 )
 from backend.app.services.dashboard_service import (
     DashboardNotFoundError,
     get_agent_dashboard,
+    get_management_dashboard,
     get_operations_dashboard,
     get_provider_dashboard,
 )
@@ -139,3 +141,24 @@ def read_provider_dashboard(
             ),
             detail=str(error),
         ) from error
+@router.get(
+    "/management",
+    response_model=ManagementDashboardResponse,
+    status_code=status.HTTP_200_OK,
+)
+def read_management_dashboard(
+    scenario_id: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=50,
+    ),
+    db: Session = Depends(
+        get_db
+    ),
+) -> ManagementDashboardResponse:
+    """Return the management and oversight dashboard."""
+
+    return get_management_dashboard(
+        db=db,
+        scenario_id=scenario_id,
+    )

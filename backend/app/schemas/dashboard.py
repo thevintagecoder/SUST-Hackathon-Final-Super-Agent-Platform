@@ -295,3 +295,66 @@ class ProviderDashboardResponse(BaseModel):
     generated_at: datetime
 
     synthetic_data_notice: str
+class ManagementSummaryResponse(BaseModel):
+    """Return network-wide management KPIs."""
+
+    total_agents: int
+    active_agents: int
+    total_providers: int
+
+    provider_balance_count: int
+    non_fresh_provider_balance_count: int
+
+    active_alert_count: int
+    resolved_alert_count: int
+    escalated_alert_count: int
+    unassigned_alert_count: int
+
+    high_or_critical_alert_count: int
+    human_review_required_count: int
+
+    support_request_count: int
+
+    alert_status_counts: dict[str, int]
+    severity_counts: dict[str, int]
+    alert_type_counts: dict[str, int]
+    support_request_status_counts: dict[str, int]
+
+    automatic_action_taken: bool = False
+
+
+class ManagementProviderRiskRow(BaseModel):
+    """Summarize network risk for one provider."""
+
+    provider_code: str
+    provider_name: str
+
+    agents_with_balance: int
+    total_electronic_balance: Decimal
+
+    non_fresh_balance_count: int
+
+    active_alert_count: int
+    high_or_critical_alert_count: int
+
+    highest_active_severity: AlertSeverity | None
+
+    human_review_required: bool
+
+
+class ManagementDashboardResponse(BaseModel):
+    """Return the management and oversight dashboard."""
+
+    summary: ManagementSummaryResponse
+
+    provider_risks: list[
+        ManagementProviderRiskRow
+    ]
+
+    scenario_id: str | None
+
+    last_updated_at: datetime | None
+    generated_at: datetime
+
+    synthetic_data_notice: str
+    decision_support_notice: str

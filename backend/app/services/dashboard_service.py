@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from backend.app.models import (
@@ -14,6 +14,7 @@ from backend.app.models import (
     Alert,
     Provider,
     ProviderBalance,
+    SupportRequest,
 )
 from backend.app.schemas.alert import (
     LocalizedAlertText,
@@ -23,6 +24,9 @@ from backend.app.schemas.dashboard import (
     AgentIdentityResponse,
     AgentRiskSummary,
     DashboardAlertItem,
+    ManagementDashboardResponse,
+    ManagementProviderRiskRow,
+    ManagementSummaryResponse,
     OperationsAgentRiskRow,
     OperationsAlertItem,
     OperationsDashboardResponse,
@@ -1175,4 +1179,418 @@ def get_provider_dashboard(
             "Provider balances are decision-support "
             "signals and require human confirmation."
         ),
+    )
+def build_alert_status_counts(
+    alerts: list[Alert],
+) -> dict[str, int]:
+    """Count alerts by workflow status."""
+
+    counts = {
+        "OPEN": 0,
+        "ACKNOWLEDGED": 0,
+        "ASSIGNED": 0,
+        "ESCALATED": 0,
+        "RESOLVED": 0,
+    }
+
+    for alert in alerts:
+        if alert.status in counts:
+            counts[alert.status] += 1
+
+    return counts
+
+
+def build_support_request_status_counts(
+    requests: list[SupportRequest],
+) -> dict[str, int]:
+    """Count support requests using their stored statuses."""
+
+    counts: dict[str, int] = {}
+
+    for request in requests:
+        status_value = str(
+            request.status
+        )
+
+        counts[status_value] = (
+            counts.get(
+                status_value,
+                0,
+            )
+            + 1
+        )
+
+    return counts
+
+def get_management_dashboard(
+    *,
+    db: Session,
+    scenario_id: str | None = None,
+) -> ManagementDashboardResponse:
+    """Build the management and oversight dashboard."""
+
+    agents = list(
+        db.scalars(
+            select(Agent).order_by(
+                Agent.code
+            )
+        ).all()
+    )
+
+    providers = list(
+        db.scalars(
+            select(Provider).order_by(
+                Provider.code
+            )
+        ).all()
+    )
+
+    provider_balances = list(
+        db.scalars(
+            select(ProviderBalance)
+        ).all()
+    )
+
+    alert_statement = select(
+        Alert
+    ).order_by(
+        Alert.created_at.desc(),
+        Alert.id.desc(),
+    )
+
+    alert_statement = (
+        filter_by_scenario_when_available(
+            statement=alert_statement,
+            model=Alert,
+            scenario_id=scenario_id,
+        )
+    )
+
+    alerts = list(
+        db.scalars(
+            alert_statement
+        ).all()
+    )
+
+    support_statement = select(
+        SupportRequest
+    )
+
+    support_statement = (
+        filter_by_scenario_when_available(
+            statement=support_statement,
+            model=SupportRequest,
+            scenario_id=scenario_id,
+        )
+    )
+
+    support_requests = list(
+        db.scalars(
+            support_statement
+        ).all()
+    )
+
+    active_alerts = [
+        alert
+        for alert in alerts
+        if alert.status != "RESOLVED"
+    ]
+
+    resolved_alerts = [
+        alert
+        for alert in alerts
+        if alert.status == "RESOLVED"
+    ]
+
+    balances_by_provider: dict[
+        int,
+        list[ProviderBalance],
+    ] = {}
+
+    for balance in provider_balances:
+        balances_by_provider.setdefault(
+            balance.provider_id,
+            [],
+        ).append(
+            balance
+        )
+
+    alerts_by_provider: dict[
+        int,
+        list[Alert],
+    ] = {}
+
+    for alert in active_alerts:
+        if alert.provider_id is None:
+            continue
+
+        alerts_by_provider.setdefault(
+            alert.provider_id,
+            [],
+        ).append(
+            alert
+        )
+
+    provider_risks: list[
+        ManagementProviderRiskRow
+    ] = []
+
+    for provider in providers:
+        balances = (
+            balances_by_provider.get(
+                provider.id,
+                [],
+            )
+        )
+
+        provider_alerts = (
+            alerts_by_provider.get(
+                provider.id,
+                [],
+            )
+        )
+
+        total_electronic_balance = sum(
+            (
+                Decimal(
+                    str(
+                        balance
+                        .electronic_balance
+                    )
+                )
+                for balance in balances
+            ),
+            Decimal("0.00"),
+        )
+
+        non_fresh_balance_count = sum(
+            (
+                balance.freshness_state
+                or "missing"
+            )
+            != "fresh"
+            for balance in balances
+        )
+
+        high_or_critical_count = sum(
+            alert.severity
+            in {
+                "HIGH",
+                "CRITICAL",
+            }
+            for alert in provider_alerts
+        )
+
+        provider_risks.append(
+            ManagementProviderRiskRow(
+                provider_code=provider.code,
+                provider_name=(
+                    provider_display_name(
+                        provider
+                    )
+                ),
+                agents_with_balance=(
+                    len(balances)
+                ),
+                total_electronic_balance=(
+                    total_electronic_balance
+                ),
+                non_fresh_balance_count=(
+                    non_fresh_balance_count
+                ),
+                active_alert_count=(
+                    len(provider_alerts)
+                ),
+                high_or_critical_alert_count=(
+                    high_or_critical_count
+                ),
+                highest_active_severity=(
+                    highest_severity(
+                        provider_alerts
+                    )
+                ),
+                human_review_required=any(
+                    alert
+                    .human_review_required
+                    for alert in provider_alerts
+                ),
+            )
+        )
+
+    provider_risks.sort(
+        key=lambda row: (
+            -SEVERITY_ORDER.get(
+                row.highest_active_severity
+                or "",
+                0,
+            ),
+            -row.high_or_critical_alert_count,
+            -row.active_alert_count,
+            row.provider_code,
+        )
+    )
+
+    update_candidates = [
+        normalize_dashboard_datetime(
+            balance.last_update_at
+        )
+        for balance in provider_balances
+    ]
+
+    update_candidates.extend(
+        normalize_dashboard_datetime(
+            alert.updated_at
+        )
+        for alert in alerts
+    )
+
+    for request in support_requests:
+        updated_at = getattr(
+            request,
+            "updated_at",
+            None,
+        )
+
+        created_at = getattr(
+            request,
+            "created_at",
+            None,
+        )
+
+        timestamp = (
+            updated_at
+            or created_at
+        )
+
+        if timestamp is not None:
+            update_candidates.append(
+                normalize_dashboard_datetime(
+                    timestamp
+                )
+            )
+
+    last_updated_at = (
+        max(
+            update_candidates
+        )
+        if update_candidates
+        else None
+    )
+
+    non_fresh_provider_balance_count = sum(
+        (
+            balance.freshness_state
+            or "missing"
+        )
+        != "fresh"
+        for balance in provider_balances
+    )
+
+    return ManagementDashboardResponse(
+        summary=ManagementSummaryResponse(
+            total_agents=len(
+                agents
+            ),
+            active_agents=sum(
+                agent.is_active
+                for agent in agents
+            ),
+            total_providers=len(
+                providers
+            ),
+            provider_balance_count=len(
+                provider_balances
+            ),
+            non_fresh_provider_balance_count=(
+                non_fresh_provider_balance_count
+            ),
+            active_alert_count=len(
+                active_alerts
+            ),
+            resolved_alert_count=len(
+                resolved_alerts
+            ),
+            escalated_alert_count=sum(
+                alert.status
+                == "ESCALATED"
+                for alert in active_alerts
+            ),
+            unassigned_alert_count=sum(
+                alert.assigned_to is None
+                for alert in active_alerts
+            ),
+            high_or_critical_alert_count=sum(
+                alert.severity
+                in {
+                    "HIGH",
+                    "CRITICAL",
+                }
+                for alert in active_alerts
+            ),
+            human_review_required_count=sum(
+                alert.human_review_required
+                for alert in active_alerts
+            ),
+            support_request_count=len(
+                support_requests
+            ),
+            alert_status_counts=(
+                build_alert_status_counts(
+                    alerts
+                )
+            ),
+            severity_counts=(
+                build_severity_counts(
+                    active_alerts
+                )
+            ),
+            alert_type_counts=(
+                build_alert_type_counts(
+                    active_alerts
+                )
+            ),
+            support_request_status_counts=(
+                build_support_request_status_counts(
+                    support_requests
+                )
+            ),
+            automatic_action_taken=False,
+        ),
+        provider_risks=provider_risks,
+        scenario_id=scenario_id,
+        last_updated_at=last_updated_at,
+        generated_at=datetime.now(
+            UTC
+        ),
+        synthetic_data_notice=(
+            "Synthetic demonstration data only."
+        ),
+        decision_support_notice=(
+            "This dashboard provides decision support. "
+            "It does not automatically move money, "
+            "suspend an Agent, or take enforcement action."
+        ),
+    )
+def filter_by_scenario_when_available(
+    *,
+    statement: Select[tuple[object]],
+    model: type[object],
+    scenario_id: str | None,
+) -> Select[tuple[object]]:
+    """Apply a scenario filter when the model supports it."""
+
+    if scenario_id is None:
+        return statement
+
+    scenario_column = getattr(
+        model,
+        "scenario_id",
+        None,
+    )
+
+    if scenario_column is None:
+        return statement
+
+    return statement.where(
+        scenario_column == scenario_id
     )
