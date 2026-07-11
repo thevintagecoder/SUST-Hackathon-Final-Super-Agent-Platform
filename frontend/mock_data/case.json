@@ -1,0 +1,26 @@
+{
+  "id": 501,
+  "alert_id": 101,
+  "status": "investigating",
+  "owner": "Sylhet Operations Desk",
+  "timeline": [
+    {
+      "event": "assigned",
+      "actor": "system",
+      "at": "2026-07-11T14:31:00Z",
+      "note": "Assigned to regional operations"
+    },
+    {
+      "event": "acknowledged",
+      "actor": "ops-user-01",
+      "at": "2026-07-11T14:36:00Z",
+      "note": "Review started"
+    },
+    {
+      "event": "note",
+      "actor": "ops-user-01",
+      "at": "2026-07-11T14:42:00Z",
+      "note": "Local event may explain demand increase"
+    }
+  ]
+}
