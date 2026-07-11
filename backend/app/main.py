@@ -7,6 +7,7 @@ from psycopg import Error as PsycopgError
 from backend.app.core.config import get_settings
 from backend.app.db.connection import check_database_connection
 from backend.app.routers.agents import router as agents_router
+from backend.app.routers.liquidity import router as liquidity_router
 
 
 class HealthResponse(BaseModel):
@@ -36,6 +37,7 @@ app = FastAPI(
 )
 
 app.include_router(agents_router)
+app.include_router(liquidity_router)
 
 
 @app.get(
