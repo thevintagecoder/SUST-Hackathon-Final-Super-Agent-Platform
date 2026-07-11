@@ -14,6 +14,9 @@ from synthetic_data.scenarios import (
     AGENT_CODE,
     AGENTS,
     BASE_TIME,
+    FORECAST_ACTUAL_BREACH_TIME,
+    FORECAST_AS_OF,
+    FORECAST_SCENARIO_ID,
     NETWORK_SCENARIO_ID,
     PROVIDER_CODES,
     SCENARIOS,
@@ -177,6 +180,9 @@ def shared_cash_for_scenario(
 
     if scenario_id == "REPEATED-001":
         return 65000.00
+    
+    if scenario_id == FORECAST_SCENARIO_ID:
+        return 90000.00
 
     return 50000.00
 
@@ -221,6 +227,13 @@ def initial_balances_for_scenario(
     if scenario_id == NETWORK_SCENARIO_ID:
         return network_provider_balances(agent_code)
 
+    if scenario_id == FORECAST_SCENARIO_ID:
+        return {
+            "BKASH_SIM": 65000.00,
+            "NAGAD_SIM": 100000.00,
+            "ROCKET_SIM": 65000.00,
+        }
+    
     if scenario_id == "SHORTAGE-001":
         return {
             "BKASH_SIM": 18000.00,
@@ -241,6 +254,15 @@ def initial_balances_for_scenario(
         "ROCKET_SIM": 58000.00,
     }
 
+def snapshot_time_for_scenario(
+    scenario_id: str,
+) -> datetime:
+    """Return the current-state timestamp for a scenario."""
+
+    if scenario_id == FORECAST_SCENARIO_ID:
+        return FORECAST_AS_OF
+
+    return BASE_TIME
 
 def feed_state_for_provider(
     scenario_id: str,
@@ -267,7 +289,14 @@ def feed_state_for_provider(
             "delayed",
             BASE_TIME - timedelta(hours=3),
         )
+    
+    if scenario_id == FORECAST_SCENARIO_ID:
+        return (
+            "fresh",
+            FORECAST_AS_OF,
+        )
 
+    
     return (
         "fresh",
         BASE_TIME,
@@ -428,6 +457,84 @@ def create_repeated_amount_transactions(
 
     return rows, transaction_counter
 
+def create_forecast_transactions(
+    *,
+    agent_code: str,
+    transaction_counter: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Create the deterministic FORECAST-001 history."""
+
+    rows: list[dict[str, Any]] = []
+
+    activities = (
+        (
+            "cash_in",
+            10000.00,
+            FORECAST_AS_OF - timedelta(hours=5),
+        ),
+        (
+            "cash_in",
+            10000.00,
+            FORECAST_AS_OF - timedelta(hours=4),
+        ),
+        (
+            "cash_in",
+            10000.00,
+            FORECAST_AS_OF - timedelta(hours=3),
+        ),
+        (
+            "cash_in",
+            10000.00,
+            FORECAST_AS_OF - timedelta(hours=2),
+        ),
+        (
+            "cash_in",
+            10000.00,
+            FORECAST_AS_OF - timedelta(hours=1),
+        ),
+        (
+            "cash_out",
+            5000.00,
+            FORECAST_AS_OF,
+        ),
+    )
+
+    for index, (
+        transaction_type,
+        amount,
+        occurred_at,
+    ) in enumerate(
+        activities,
+        start=1,
+    ):
+        transaction_counter += 1
+
+        rows.append(
+            {
+                "external_id": (
+                    f"TXN-{transaction_counter:06d}"
+                ),
+                "scenario_id": (
+                    FORECAST_SCENARIO_ID
+                ),
+                "agent_code": agent_code,
+                "provider_code": "NAGAD_SIM",
+                "synthetic_customer_id": (
+                    f"CUSTOMER-FORECAST-{index:04d}"
+                ),
+                "transaction_type": transaction_type,
+                "amount": format_amount(amount),
+                "occurred_at": format_datetime(
+                    occurred_at
+                ),
+                "status": "completed",
+                "anomaly_expected": "false",
+                "anomaly_category": "",
+                "injection_start_time": "",
+            }
+        )
+
+    return rows, transaction_counter
 
 def network_request_ground_truth() -> dict[str, Any]:
     """Describe the expected multi-Agent coordination outcome."""
@@ -443,6 +550,46 @@ def network_request_ground_truth() -> dict[str, Any]:
         "preferred_fresh_candidate": "AGENT-SYL-002",
         "cash_out_candidate": "AGENT-SYL-003",
         "stale_candidate": "AGENT-SYL-004",
+    }
+
+def forecast_evaluation_ground_truth() -> dict[str, Any]:
+    """Describe the expected FORECAST-001 result."""
+
+    predicted_breach_time = (
+        FORECAST_AS_OF
+        + timedelta(hours=8)
+    )
+
+    return {
+        "agent_code": "AGENT-SYL-001",
+        "resource_type": "provider_float",
+        "provider_code": "NAGAD_SIM",
+        "lookback_hours": 6,
+        "warning_threshold_hours": "8.00",
+        "forecast_as_of": format_datetime(
+            FORECAST_AS_OF
+        ),
+        "current_balance": "100000.00",
+        "safety_threshold": "40000.00",
+        "expected_completed_transaction_count": 6,
+        "expected_gross_consumption": "50000.00",
+        "expected_gross_replenishment": "5000.00",
+        "expected_net_consumption": "45000.00",
+        "expected_net_consumption_per_hour": "7500.00",
+        "expected_runway_hours": "8.00",
+        "expected_risk_level": "HIGH",
+        "expected_estimated_threshold_breach_time": (
+            format_datetime(
+                predicted_breach_time
+            )
+        ),
+        "actual_threshold_breach_time": (
+            format_datetime(
+                FORECAST_ACTUAL_BREACH_TIME
+            )
+        ),
+        "expected_forecast_error_hours": "0.50",
+        "expected_warning_lead_time_hours": "8.50",
     }
 
 
@@ -489,11 +636,13 @@ def build_dataset(
                     "shared_cash": format_amount(
                         shared_cash_for_scenario(
                             scenario.scenario_id,
-                            agent_code,
+                             agent_code,
                         )
                     ),
                     "as_of": format_datetime(
-                        BASE_TIME
+                        snapshot_time_for_scenario(
+                            scenario.scenario_id
+                      )
                     ),
                 }
             )
@@ -556,31 +705,54 @@ def build_dataset(
                     }
                 )
 
-            transaction_count = (
-                8
-                if (
-                    scenario.scenario_id
-                    == NETWORK_SCENARIO_ID
+            if (
+                scenario.scenario_id
+                == FORECAST_SCENARIO_ID
+            ):
+                (
+                    forecast_rows,
+                    transaction_counter,
+                ) = create_forecast_transactions(
+                    agent_code=agent_code,
+                    transaction_counter=(
+                        transaction_counter
+                    ),
                 )
-                else 24
-            )
 
-            (
-                ordinary_rows,
-                transaction_counter,
-            ) = create_standard_transactions(
-                scenario=scenario,
-                agent_code=agent_code,
-                transaction_count=transaction_count,
-                random_generator=random_generator,
-                transaction_counter=(
-                    transaction_counter
-                ),
-            )
+                transaction_rows.extend(
+                    forecast_rows
+                )
 
-            transaction_rows.extend(
-                ordinary_rows
-            )
+            else:
+                transaction_count = (
+                    8
+                    if (
+                        scenario.scenario_id
+                        == NETWORK_SCENARIO_ID
+                    )
+                    else 24
+                )
+
+                (
+                    ordinary_rows,
+                    transaction_counter,
+                ) = create_standard_transactions(
+                    scenario=scenario,
+                    agent_code=agent_code,
+                    transaction_count=(
+                        transaction_count
+                    ),
+                    random_generator=(
+                        random_generator
+                    ),
+                    transaction_counter=(
+                        transaction_counter
+                    ),
+                )
+
+                transaction_rows.extend(
+                    ordinary_rows
+                )
 
         if scenario.anomaly_expected:
             (
@@ -635,7 +807,16 @@ def build_dataset(
             scenario_ground_truth[
                 "serviceability_request"
             ] = network_request_ground_truth()
-
+        
+        if (
+            scenario.scenario_id
+            == FORECAST_SCENARIO_ID
+        ):
+            scenario_ground_truth[
+                "forecast_evaluation"
+            ] = (
+                forecast_evaluation_ground_truth()
+            )
         ground_truth_scenarios.append(
             scenario_ground_truth
         )

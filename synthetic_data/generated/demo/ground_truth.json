@@ -120,7 +120,41 @@
         "stale_candidate": "AGENT-SYL-004",
         "transaction_type": "cash_in"
       }
+    },
+    {
+      "agent_codes": [
+        "AGENT-SYL-001"
+      ],
+      "anomaly_category": null,
+      "anomaly_expected": false,
+      "description": "A fixed Nagad electronic-float consumption pattern is used to evaluate forecast error and shortage-warning lead time.",
+      "expected_shortage_resource": "NAGAD_SIM",
+      "expected_shortage_time": "2026-07-11T22:30:00Z",
+      "forecast_evaluation": {
+        "actual_threshold_breach_time": "2026-07-11T22:30:00Z",
+        "agent_code": "AGENT-SYL-001",
+        "current_balance": "100000.00",
+        "expected_completed_transaction_count": 6,
+        "expected_estimated_threshold_breach_time": "2026-07-11T22:00:00Z",
+        "expected_forecast_error_hours": "0.50",
+        "expected_gross_consumption": "50000.00",
+        "expected_gross_replenishment": "5000.00",
+        "expected_net_consumption": "45000.00",
+        "expected_net_consumption_per_hour": "7500.00",
+        "expected_risk_level": "HIGH",
+        "expected_runway_hours": "8.00",
+        "expected_warning_lead_time_hours": "8.50",
+        "forecast_as_of": "2026-07-11T14:00:00Z",
+        "lookback_hours": 6,
+        "provider_code": "NAGAD_SIM",
+        "resource_type": "provider_float",
+        "safety_threshold": "40000.00",
+        "warning_threshold_hours": "8.00"
+      },
+      "injection_start_time": "2026-07-11T14:00:00Z",
+      "name": "Deterministic liquidity runway forecast",
+      "scenario_id": "FORECAST-001"
     }
   ],
-  "seed": 100
+  "seed": 42
 }

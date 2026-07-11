@@ -311,6 +311,7 @@ def get_latest_transaction_time(
     agent: Agent,
     provider: Provider | None,
     resource_type: str,
+    scenario_id: str | None,
 ) -> datetime:
     """Find the newest completed transaction in scope."""
 
@@ -321,10 +322,16 @@ def get_latest_transaction_time(
         Transaction.status == "completed",
     )
 
+    if scenario_id is not None:
+        statement = statement.where(
+            Transaction.scenario_id == scenario_id
+        )
+
     if resource_type == "provider_float":
         if provider is None:
             raise ForecastValidationError(
-                "provider_code is required for provider-float forecasts."
+                "provider_code is required for "
+                "provider-float forecasts."
             )
 
         statement = statement.where(
@@ -348,6 +355,7 @@ def get_transactions_in_window(
     agent: Agent,
     provider: Provider | None,
     resource_type: str,
+    scenario_id: str | None,
     window_start: datetime,
     window_end: datetime,
 ) -> list[Transaction]:
@@ -367,10 +375,16 @@ def get_transactions_in_window(
         )
     )
 
+    if scenario_id is not None:
+        statement = statement.where(
+            Transaction.scenario_id == scenario_id
+        )
+
     if resource_type == "provider_float":
         if provider is None:
             raise ForecastValidationError(
-                "provider_code is required for provider-float forecasts."
+                "provider_code is required for "
+                "provider-float forecasts."
             )
 
         statement = statement.where(
@@ -440,6 +454,7 @@ def forecast_liquidity_runway(
         agent=agent,
         provider=provider,
         resource_type=request.resource_type,
+        scenario_id=request.scenario_id,
     )
 
     window_start = forecast_as_of - timedelta(
@@ -451,6 +466,7 @@ def forecast_liquidity_runway(
         agent=agent,
         provider=provider,
         resource_type=request.resource_type,
+        scenario_id=request.scenario_id,
         window_start=window_start,
         window_end=forecast_as_of,
     )
@@ -586,6 +602,7 @@ def forecast_liquidity_runway(
             if provider is not None
             else None
         ),
+        scenario_id=request.scenario_id,
         current_balance=current_balance,
         safety_threshold=safety_threshold,
         balance_above_threshold=(

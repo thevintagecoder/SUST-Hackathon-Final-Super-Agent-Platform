@@ -195,12 +195,13 @@ def test_ground_truth_contains_required_scenarios(
     }
 
     assert set(scenarios) == {
-        "NORMAL-001",
-        "SHORTAGE-001",
-        "REPEATED-001",
-        "STALE-001",
-        "NETWORK-001",
-    }
+    "NORMAL-001",
+    "SHORTAGE-001",
+    "REPEATED-001",
+    "STALE-001",
+    "NETWORK-001",
+    "FORECAST-001",
+}
 
     assert (
         scenarios["NORMAL-001"][
@@ -444,4 +445,106 @@ def test_network_ground_truth_describes_customer_request(
     assert (
         request["stale_candidate"]
         == "AGENT-SYL-004"
+    )
+
+def test_forecast_scenario_has_deterministic_ground_truth(
+    tmp_path: Path,
+) -> None:
+    """FORECAST-001 should have reproducible evaluation values."""
+
+    generate_bundle(
+        output_directory=tmp_path,
+        seed=42,
+    )
+
+    transaction_rows = read_csv_rows(
+        tmp_path / "transactions.csv"
+    )
+
+    forecast_rows = [
+        row
+        for row in transaction_rows
+        if (
+            row["scenario_id"]
+            == "FORECAST-001"
+        )
+    ]
+
+    assert len(forecast_rows) == 6
+
+    assert all(
+        row["agent_code"]
+        == "AGENT-SYL-001"
+        for row in forecast_rows
+    )
+
+    assert all(
+        row["provider_code"]
+        == "NAGAD_SIM"
+        for row in forecast_rows
+    )
+
+    cash_in_total = sum(
+        float(row["amount"])
+        for row in forecast_rows
+        if row["transaction_type"]
+        == "cash_in"
+    )
+
+    cash_out_total = sum(
+        float(row["amount"])
+        for row in forecast_rows
+        if row["transaction_type"]
+        == "cash_out"
+    )
+
+    assert cash_in_total == 50000.00
+    assert cash_out_total == 5000.00
+
+    ground_truth = json.loads(
+        (
+            tmp_path / "ground_truth.json"
+        ).read_text(
+            encoding="utf-8",
+        )
+    )
+
+    forecast_scenario = next(
+        scenario
+        for scenario in ground_truth[
+            "scenarios"
+        ]
+        if (
+            scenario["scenario_id"]
+            == "FORECAST-001"
+        )
+    )
+
+    evaluation = forecast_scenario[
+        "forecast_evaluation"
+    ]
+
+    assert (
+        evaluation[
+            "expected_runway_hours"
+        ]
+        == "8.00"
+    )
+    assert (
+        evaluation[
+            "expected_risk_level"
+        ]
+        == "HIGH"
+    )
+    assert (
+        evaluation[
+            "expected_forecast_error_hours"
+        ]
+        == "0.50"
+    )
+    assert (
+        evaluation[
+            "expected_warning_lead_time_hours"
+        ]
+        == "8.50"
     )

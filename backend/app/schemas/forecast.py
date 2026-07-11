@@ -37,6 +37,12 @@ class LiquidityRunwayRequest(BaseModel):
         max_length=30,
     )
 
+    scenario_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
     lookback_hours: int = Field(
         default=6,
         ge=1,
@@ -56,6 +62,7 @@ class LiquidityRunwayResponse(BaseModel):
     agent_code: str
     resource_type: ForecastResourceType
     provider_code: str | None
+    scenario_id: str | None
 
     current_balance: Decimal
     safety_threshold: Decimal

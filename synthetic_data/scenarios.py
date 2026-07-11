@@ -1,7 +1,7 @@
 """Definitions for deterministic synthetic demonstration scenarios."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 
@@ -21,6 +21,19 @@ BASE_TIME = datetime(
 )
 
 NETWORK_SCENARIO_ID = "NETWORK-001"
+FORECAST_SCENARIO_ID = "FORECAST-001"
+
+FORECAST_AS_OF = BASE_TIME + timedelta(
+    hours=6,
+)
+
+FORECAST_ACTUAL_BREACH_TIME = (
+    FORECAST_AS_OF
+    + timedelta(
+        hours=8,
+        minutes=30,
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -192,5 +205,22 @@ SCENARIOS = (
             tzinfo=UTC,
         ),
         expected_shortage_time=None,
+    ),
+
+    ScenarioDefinition(
+        scenario_id=FORECAST_SCENARIO_ID,
+        name="Deterministic liquidity runway forecast",
+        description=(
+            "A fixed Nagad electronic-float consumption pattern "
+            "is used to evaluate forecast error and shortage-"
+            "warning lead time."
+        ),
+        anomaly_expected=False,
+        anomaly_category=None,
+        expected_shortage_resource="NAGAD_SIM",
+        injection_start_time=FORECAST_AS_OF,
+        expected_shortage_time=(
+            FORECAST_ACTUAL_BREACH_TIME
+        ),
     ),
 )
