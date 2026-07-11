@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.session import get_db
 from backend.app.schemas.dashboard import (
     AgentDashboardResponse,
+    EvaluationDashboardResponse,
     ManagementDashboardResponse,
     OperationsDashboardResponse,
     ProviderDashboardResponse,
@@ -23,7 +24,9 @@ from backend.app.services.dashboard_service import (
     get_operations_dashboard,
     get_provider_dashboard,
 )
-
+from backend.app.services.evaluation_dashboard_service import (
+    get_evaluation_dashboard,
+)
 
 router = APIRouter(
     prefix="/dashboards",
@@ -162,3 +165,13 @@ def read_management_dashboard(
         db=db,
         scenario_id=scenario_id,
     )
+@router.get(
+    "/evaluation",
+    response_model=EvaluationDashboardResponse,
+    status_code=status.HTTP_200_OK,
+)
+def read_evaluation_dashboard(
+) -> EvaluationDashboardResponse:
+    """Return controlled synthetic evaluation metrics."""
+
+    return get_evaluation_dashboard()

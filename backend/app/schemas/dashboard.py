@@ -358,3 +358,48 @@ class ManagementDashboardResponse(BaseModel):
 
     synthetic_data_notice: str
     decision_support_notice: str
+class ForecastEvaluationResponse(BaseModel):
+    """Return controlled forecast benchmark results."""
+
+    scenario_id: str
+
+    predicted_runway_hours: Decimal
+    actual_breach_hours: Decimal
+
+    absolute_error_hours: Decimal
+    warning_lead_time_hours: Decimal
+
+    benchmark_passed: bool
+
+
+class AnomalyEvaluationResponse(BaseModel):
+    """Return controlled anomaly benchmark results."""
+
+    evaluated_scenarios: list[str]
+
+    true_positive: int
+    true_negative: int
+    false_positive: int
+    false_negative: int
+
+    precision: Decimal
+    recall: Decimal
+    false_positive_rate: Decimal
+
+    benchmark_passed: bool
+
+
+class EvaluationDashboardResponse(BaseModel):
+    """Return final controlled synthetic evaluation metrics."""
+
+    benchmark_id: str
+    dataset_type: str
+
+    forecast: ForecastEvaluationResponse
+    anomaly: AnomalyEvaluationResponse
+
+    responsible_ai_checks: dict[str, bool]
+
+    limitations: list[str]
+
+    generated_at: datetime
