@@ -21,6 +21,9 @@ ChatGPT
 
 > I pasted the requested command outputs. Give me the next steps.
 
+> Give me the steps to add `agents.csv`, create four synthetic Agents,
+> and introduce the `NETWORK-001` scenario.
+
 ## Guidance summary
 
 This feature is implemented incrementally.
@@ -43,12 +46,35 @@ Later increments will:
 Coordinates remain optional so existing database rows are not broken by
 the migration.
 
+The synthetic generator now produces `agents.csv` containing four
+clearly synthetic located Agents.
+
+The new `NETWORK-001` scenario represents:
+
+- AGENT-SYL-001 with insufficient Nagad electronic float;
+- AGENT-SYL-002 with fresh excess Nagad capacity;
+- AGENT-SYL-003 with high physical-cash capacity;
+- AGENT-SYL-004 with high reported Nagad capacity but delayed data.
+
+The scenario ground truth includes a simulated ৳80,000 Nagad cash-in
+request at AGENT-SYL-001, an expected local shortfall of ৳60,000, the
+preferred fresh candidate, and the stale candidate.
+
+The existing loader is not yet used for NETWORK-001 because it currently
+expects one Agent per scenario. Multi-Agent loader support is deferred to
+the next increment.
+
 ## Files affected in this increment
 
 - `backend/app/models/agent.py`
 - `backend/alembic/versions/<revision>_add_agent_coordinates.py`
 - `backend/tests/test_agent_location_model.py`
 - `prompts/0008-add-multi-agent-network-data.md`
+- `synthetic_data/scenarios.py`
+- `synthetic_data/generator.py`
+- `synthetic_data/tests/test_generator.py`
+- `synthetic_data/README.md`
+- `synthetic_data/generated/demo/agents.csv`
 
 ## Human review and modifications
 

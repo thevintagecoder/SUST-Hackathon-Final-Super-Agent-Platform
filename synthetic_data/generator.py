@@ -12,7 +12,9 @@ from typing import Any
 
 from synthetic_data.scenarios import (
     AGENT_CODE,
+    AGENTS,
     BASE_TIME,
+    NETWORK_SCENARIO_ID,
     PROVIDER_CODES,
     SCENARIOS,
     ScenarioDefinition,
@@ -22,6 +24,15 @@ from synthetic_data.scenarios import (
 DEFAULT_SEED = 42
 DEFAULT_OUTPUT_DIRECTORY = Path(
     "synthetic_data/generated/demo"
+)
+
+AGENT_FIELDS = (
+    "agent_code",
+    "name",
+    "area",
+    "latitude",
+    "longitude",
+    "is_active",
 )
 
 TRANSACTION_FIELDS = (
@@ -57,6 +68,7 @@ PROVIDER_BALANCE_FIELDS = (
 
 PROVIDER_FEED_FIELDS = (
     "scenario_id",
+    "agent_code",
     "provider_code",
     "last_update_at",
     "freshness_state",
@@ -104,10 +116,110 @@ def write_csv(
         writer.writerows(rows)
 
 
+def create_agent_rows() -> list[dict[str, Any]]:
+    """Create one stable row for every synthetic Agent."""
+
+    return [
+        {
+            "agent_code": agent.agent_code,
+            "name": agent.name,
+            "area": agent.area,
+            "latitude": str(agent.latitude),
+            "longitude": str(agent.longitude),
+            "is_active": (
+                "true" if agent.is_active else "false"
+            ),
+        }
+        for agent in AGENTS
+    ]
+
+
+def active_agent_codes_for_scenario(
+    scenario_id: str,
+) -> tuple[str, ...]:
+    """Return the Agents that participate in a scenario."""
+
+    if scenario_id == NETWORK_SCENARIO_ID:
+        return tuple(
+            agent.agent_code
+            for agent in AGENTS
+        )
+
+    return (AGENT_CODE,)
+
+
+def network_shared_cash(
+    agent_code: str,
+) -> float:
+    """Return shared cash for the network scenario."""
+
+    values = {
+        "AGENT-SYL-001": 25000.00,
+        "AGENT-SYL-002": 55000.00,
+        "AGENT-SYL-003": 140000.00,
+        "AGENT-SYL-004": 90000.00,
+    }
+
+    return values[agent_code]
+
+
+def shared_cash_for_scenario(
+    scenario_id: str,
+    agent_code: str,
+) -> float:
+    """Return scenario-specific starting shared cash."""
+
+    if scenario_id == NETWORK_SCENARIO_ID:
+        return network_shared_cash(agent_code)
+
+    if scenario_id == "SHORTAGE-001":
+        return 70000.00
+
+    if scenario_id == "REPEATED-001":
+        return 65000.00
+
+    return 50000.00
+
+
+def network_provider_balances(
+    agent_code: str,
+) -> dict[str, float]:
+    """Return provider balances for the network scenario."""
+
+    balances = {
+        "AGENT-SYL-001": {
+            "BKASH_SIM": 30000.00,
+            "NAGAD_SIM": 20000.00,
+            "ROCKET_SIM": 25000.00,
+        },
+        "AGENT-SYL-002": {
+            "BKASH_SIM": 50000.00,
+            "NAGAD_SIM": 120000.00,
+            "ROCKET_SIM": 45000.00,
+        },
+        "AGENT-SYL-003": {
+            "BKASH_SIM": 45000.00,
+            "NAGAD_SIM": 30000.00,
+            "ROCKET_SIM": 40000.00,
+        },
+        "AGENT-SYL-004": {
+            "BKASH_SIM": 70000.00,
+            "NAGAD_SIM": 150000.00,
+            "ROCKET_SIM": 65000.00,
+        },
+    }
+
+    return balances[agent_code]
+
+
 def initial_balances_for_scenario(
     scenario_id: str,
+    agent_code: str,
 ) -> dict[str, float]:
     """Return scenario-specific starting provider balances."""
+
+    if scenario_id == NETWORK_SCENARIO_ID:
+        return network_provider_balances(agent_code)
 
     if scenario_id == "SHORTAGE-001":
         return {
@@ -130,22 +242,9 @@ def initial_balances_for_scenario(
     }
 
 
-def shared_cash_for_scenario(
-    scenario_id: str,
-) -> float:
-    """Return scenario-specific starting shared cash."""
-
-    if scenario_id == "SHORTAGE-001":
-        return 70000.00
-
-    if scenario_id == "REPEATED-001":
-        return 65000.00
-
-    return 50000.00
-
-
 def feed_state_for_provider(
     scenario_id: str,
+    agent_code: str,
     provider_code: str,
 ) -> tuple[str, datetime]:
     """Return freshness state and update time."""
@@ -157,6 +256,16 @@ def feed_state_for_provider(
         return (
             "delayed",
             BASE_TIME - timedelta(hours=2),
+        )
+
+    if (
+        scenario_id == NETWORK_SCENARIO_ID
+        and agent_code == "AGENT-SYL-004"
+        and provider_code == "NAGAD_SIM"
+    ):
+        return (
+            "delayed",
+            BASE_TIME - timedelta(hours=3),
         )
 
     return (
@@ -187,14 +296,21 @@ def normal_transaction_amount(
 
 def create_standard_transactions(
     scenario: ScenarioDefinition,
+    agent_code: str,
+    transaction_count: int,
     random_generator: random.Random,
     transaction_counter: int,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Generate ordinary activity for one scenario."""
+    """Generate ordinary activity for one Agent and scenario."""
 
     rows: list[dict[str, Any]] = []
 
-    for index in range(24):
+    agent_suffix = agent_code.rsplit(
+        "-",
+        maxsplit=1,
+    )[-1]
+
+    for index in range(transaction_count):
         provider_code = random_generator.choice(
             PROVIDER_CODES
         )
@@ -225,10 +341,11 @@ def create_standard_transactions(
                     f"TXN-{transaction_counter:06d}"
                 ),
                 "scenario_id": scenario.scenario_id,
-                "agent_code": AGENT_CODE,
+                "agent_code": agent_code,
                 "provider_code": provider_code,
                 "synthetic_customer_id": (
-                    f"CUSTOMER-{index + 1:04d}"
+                    f"CUSTOMER-{agent_suffix}-"
+                    f"{index + 1:04d}"
                 ),
                 "transaction_type": transaction_type,
                 "amount": format_amount(amount),
@@ -251,6 +368,7 @@ def create_standard_transactions(
 
 def create_repeated_amount_transactions(
     scenario: ScenarioDefinition,
+    agent_code: str,
     transaction_counter: int,
 ) -> tuple[list[dict[str, Any]], int]:
     """Generate the injected repeated-amount sequence."""
@@ -285,7 +403,7 @@ def create_repeated_amount_transactions(
                     f"TXN-{transaction_counter:06d}"
                 ),
                 "scenario_id": scenario.scenario_id,
-                "agent_code": AGENT_CODE,
+                "agent_code": agent_code,
                 "provider_code": "BKASH_SIM",
                 "synthetic_customer_id": (
                     f"CUSTOMER-REPEAT-{index + 1:02d}"
@@ -311,6 +429,23 @@ def create_repeated_amount_transactions(
     return rows, transaction_counter
 
 
+def network_request_ground_truth() -> dict[str, Any]:
+    """Describe the expected multi-Agent coordination outcome."""
+
+    return {
+        "requesting_agent_code": "AGENT-SYL-001",
+        "provider_code": "NAGAD_SIM",
+        "transaction_type": "cash_in",
+        "requested_amount": "80000.00",
+        "local_available_amount": "20000.00",
+        "expected_shortfall": "60000.00",
+        "expected_local_serviceable": False,
+        "preferred_fresh_candidate": "AGENT-SYL-002",
+        "cash_out_candidate": "AGENT-SYL-003",
+        "stale_candidate": "AGENT-SYL-004",
+    }
+
+
 def build_dataset(
     seed: int,
 ) -> dict[str, Any]:
@@ -318,6 +453,7 @@ def build_dataset(
 
     random_generator = random.Random(seed)
 
+    agent_rows = create_agent_rows()
     initial_position_rows: list[
         dict[str, Any]
     ] = []
@@ -337,92 +473,114 @@ def build_dataset(
     transaction_counter = 0
 
     for scenario in SCENARIOS:
-        initial_position_rows.append(
-            {
-                "scenario_id": (
-                    scenario.scenario_id
-                ),
-                "agent_code": AGENT_CODE,
-                "shared_cash": format_amount(
-                    shared_cash_for_scenario(
+        scenario_agent_codes = (
+            active_agent_codes_for_scenario(
+                scenario.scenario_id
+            )
+        )
+
+        for agent_code in scenario_agent_codes:
+            initial_position_rows.append(
+                {
+                    "scenario_id": (
                         scenario.scenario_id
-                    )
-                ),
-                "as_of": format_datetime(
-                    BASE_TIME
-                ),
-            }
-        )
+                    ),
+                    "agent_code": agent_code,
+                    "shared_cash": format_amount(
+                        shared_cash_for_scenario(
+                            scenario.scenario_id,
+                            agent_code,
+                        )
+                    ),
+                    "as_of": format_datetime(
+                        BASE_TIME
+                    ),
+                }
+            )
 
-        balances = initial_balances_for_scenario(
-            scenario.scenario_id
-        )
-
-        for provider_code in PROVIDER_CODES:
-            (
-                freshness_state,
-                last_update_at,
-            ) = feed_state_for_provider(
+            balances = initial_balances_for_scenario(
                 scenario.scenario_id,
-                provider_code,
+                agent_code,
             )
 
-            provider_balance_rows.append(
-                {
-                    "scenario_id": (
-                        scenario.scenario_id
-                    ),
-                    "agent_code": AGENT_CODE,
-                    "provider_code": provider_code,
-                    "electronic_balance": (
-                        format_amount(
-                            balances[
-                                provider_code
-                            ]
-                        )
-                    ),
-                    "last_update_at": (
-                        format_datetime(
-                            last_update_at
-                        )
-                    ),
-                    "freshness_state": (
-                        freshness_state
-                    ),
-                }
+            for provider_code in PROVIDER_CODES:
+                (
+                    freshness_state,
+                    last_update_at,
+                ) = feed_state_for_provider(
+                    scenario.scenario_id,
+                    agent_code,
+                    provider_code,
+                )
+
+                provider_balance_rows.append(
+                    {
+                        "scenario_id": (
+                            scenario.scenario_id
+                        ),
+                        "agent_code": agent_code,
+                        "provider_code": provider_code,
+                        "electronic_balance": (
+                            format_amount(
+                                balances[
+                                    provider_code
+                                ]
+                            )
+                        ),
+                        "last_update_at": (
+                            format_datetime(
+                                last_update_at
+                            )
+                        ),
+                        "freshness_state": (
+                            freshness_state
+                        ),
+                    }
+                )
+
+                provider_feed_rows.append(
+                    {
+                        "scenario_id": (
+                            scenario.scenario_id
+                        ),
+                        "agent_code": agent_code,
+                        "provider_code": provider_code,
+                        "last_update_at": (
+                            format_datetime(
+                                last_update_at
+                            )
+                        ),
+                        "freshness_state": (
+                            freshness_state
+                        ),
+                    }
+                )
+
+            transaction_count = (
+                8
+                if (
+                    scenario.scenario_id
+                    == NETWORK_SCENARIO_ID
+                )
+                else 24
             )
 
-            provider_feed_rows.append(
-                {
-                    "scenario_id": (
-                        scenario.scenario_id
-                    ),
-                    "provider_code": provider_code,
-                    "last_update_at": (
-                        format_datetime(
-                            last_update_at
-                        )
-                    ),
-                    "freshness_state": (
-                        freshness_state
-                    ),
-                }
+            (
+                ordinary_rows,
+                transaction_counter,
+            ) = create_standard_transactions(
+                scenario=scenario,
+                agent_code=agent_code,
+                transaction_count=transaction_count,
+                random_generator=random_generator,
+                transaction_counter=(
+                    transaction_counter
+                ),
             )
 
-        (
-            ordinary_rows,
-            transaction_counter,
-        ) = create_standard_transactions(
-            scenario=scenario,
-            random_generator=random_generator,
-            transaction_counter=(
-                transaction_counter
-            ),
-        )
-
-        transaction_rows.extend(
-            ordinary_rows
-        )
+            transaction_rows.extend(
+                ordinary_rows
+            )
 
         if scenario.anomaly_expected:
             (
@@ -430,6 +588,7 @@ def build_dataset(
                 transaction_counter,
             ) = create_repeated_amount_transactions(
                 scenario=scenario,
+                agent_code=AGENT_CODE,
                 transaction_counter=(
                     transaction_counter
                 ),
@@ -439,48 +598,79 @@ def build_dataset(
                 injected_rows
             )
 
+        scenario_ground_truth: dict[str, Any] = {
+            "scenario_id": scenario.scenario_id,
+            "name": scenario.name,
+            "description": scenario.description,
+            "agent_codes": list(
+                scenario_agent_codes
+            ),
+            "anomaly_expected": (
+                scenario.anomaly_expected
+            ),
+            "anomaly_category": (
+                scenario.anomaly_category
+            ),
+            "expected_shortage_resource": (
+                scenario.expected_shortage_resource
+            ),
+            "injection_start_time": (
+                format_datetime(
+                    scenario.injection_start_time
+                )
+                or None
+            ),
+            "expected_shortage_time": (
+                format_datetime(
+                    scenario.expected_shortage_time
+                )
+                or None
+            ),
+        }
+
+        if (
+            scenario.scenario_id
+            == NETWORK_SCENARIO_ID
+        ):
+            scenario_ground_truth[
+                "serviceability_request"
+            ] = network_request_ground_truth()
+
         ground_truth_scenarios.append(
-            {
-                "scenario_id": (
-                    scenario.scenario_id
-                ),
-                "name": scenario.name,
-                "description": (
-                    scenario.description
-                ),
-                "anomaly_expected": (
-                    scenario.anomaly_expected
-                ),
-                "anomaly_category": (
-                    scenario.anomaly_category
-                ),
-                "expected_shortage_resource": (
-                    scenario.expected_shortage_resource
-                ),
-                "injection_start_time": (
-                    format_datetime(
-                        scenario.injection_start_time
-                    )
-                    or None
-                ),
-                "expected_shortage_time": (
-                    format_datetime(
-                        scenario.expected_shortage_time
-                    )
-                    or None
-                ),
-            }
+            scenario_ground_truth
         )
 
+    initial_position_rows.sort(
+        key=lambda row: (
+            row["scenario_id"],
+            row["agent_code"],
+        )
+    )
+    provider_balance_rows.sort(
+        key=lambda row: (
+            row["scenario_id"],
+            row["agent_code"],
+            row["provider_code"],
+        )
+    )
+    provider_feed_rows.sort(
+        key=lambda row: (
+            row["scenario_id"],
+            row["agent_code"],
+            row["provider_code"],
+        )
+    )
     transaction_rows.sort(
         key=lambda row: (
             row["scenario_id"],
+            row["agent_code"],
             row["occurred_at"],
             row["external_id"],
         )
     )
 
     return {
+        "agents": agent_rows,
         "initial_positions": initial_position_rows,
         "provider_balances": provider_balance_rows,
         "provider_feed_status": provider_feed_rows,
@@ -490,10 +680,11 @@ def build_dataset(
             "generated_at": format_datetime(
                 BASE_TIME
             ),
-            "agent_code": AGENT_CODE,
+            "primary_agent_code": AGENT_CODE,
             "providers": list(
                 PROVIDER_CODES
             ),
+            "agents": agent_rows,
             "scenarios": ground_truth_scenarios,
         },
     }
@@ -513,6 +704,10 @@ def generate_bundle(
     dataset = build_dataset(seed)
 
     output_paths = {
+        "agents": (
+            output_directory
+            / "agents.csv"
+        ),
         "initial_positions": (
             output_directory
             / "initial_positions.csv"
@@ -534,6 +729,12 @@ def generate_bundle(
             / "ground_truth.json"
         ),
     }
+
+    write_csv(
+        output_paths["agents"],
+        AGENT_FIELDS,
+        dataset["agents"],
+    )
 
     write_csv(
         output_paths["initial_positions"],

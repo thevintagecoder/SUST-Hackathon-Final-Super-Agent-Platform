@@ -10,6 +10,7 @@ from synthetic_data.generator import (
 
 
 EXPECTED_FILENAMES = {
+    "agents.csv",
     "initial_positions.csv",
     "provider_balances.csv",
     "provider_feed_status.csv",
@@ -92,6 +93,44 @@ def test_generator_is_reproducible(
         assert first_content == second_content
 
 
+def test_agents_file_contains_four_synthetic_agents(
+    tmp_path: Path,
+) -> None:
+    """The network should contain four located Agents."""
+
+    generate_bundle(
+        output_directory=tmp_path,
+        seed=42,
+    )
+
+    rows = read_csv_rows(
+        tmp_path / "agents.csv"
+    )
+
+    assert len(rows) == 4
+
+    agent_codes = {
+        row["agent_code"]
+        for row in rows
+    }
+
+    assert agent_codes == {
+        "AGENT-SYL-001",
+        "AGENT-SYL-002",
+        "AGENT-SYL-003",
+        "AGENT-SYL-004",
+    }
+
+    for row in rows:
+        assert row["agent_code"].startswith(
+            "AGENT-SYL-"
+        )
+        assert row["area"] == "Sylhet"
+        assert row["latitude"]
+        assert row["longitude"]
+        assert row["is_active"] == "true"
+
+
 def test_transactions_are_valid(
     tmp_path: Path,
 ) -> None:
@@ -125,7 +164,9 @@ def test_transactions_are_valid(
             in ALLOWED_TRANSACTION_TYPES
         )
         assert float(row["amount"]) > 0
-        assert row["synthetic_customer_id"].startswith(
+        assert row[
+            "synthetic_customer_id"
+        ].startswith(
             "CUSTOMER-"
         )
 
@@ -158,6 +199,7 @@ def test_ground_truth_contains_required_scenarios(
         "SHORTAGE-001",
         "REPEATED-001",
         "STALE-001",
+        "NETWORK-001",
     }
 
     assert (
@@ -254,4 +296,152 @@ def test_stale_scenario_contains_delayed_feed(
     assert (
         delayed_rows[0]["freshness_state"]
         == "delayed"
+    )
+
+
+def test_network_scenario_has_four_agent_positions(
+    tmp_path: Path,
+) -> None:
+    """NETWORK-001 should contain all four Agents."""
+
+    generate_bundle(
+        output_directory=tmp_path,
+        seed=42,
+    )
+
+    rows = read_csv_rows(
+        tmp_path / "initial_positions.csv"
+    )
+
+    network_rows = [
+        row
+        for row in rows
+        if row["scenario_id"] == "NETWORK-001"
+    ]
+
+    assert len(network_rows) == 4
+
+    cash_by_agent = {
+        row["agent_code"]: row["shared_cash"]
+        for row in network_rows
+    }
+
+    assert (
+        cash_by_agent["AGENT-SYL-001"]
+        == "25000.00"
+    )
+    assert (
+        cash_by_agent["AGENT-SYL-003"]
+        == "140000.00"
+    )
+
+
+def test_network_scenario_has_expected_nagad_capacity(
+    tmp_path: Path,
+) -> None:
+    """Agents should have different Nagad capabilities."""
+
+    generate_bundle(
+        output_directory=tmp_path,
+        seed=42,
+    )
+
+    balance_rows = read_csv_rows(
+        tmp_path / "provider_balances.csv"
+    )
+
+    nagad_rows = [
+        row
+        for row in balance_rows
+        if (
+            row["scenario_id"]
+            == "NETWORK-001"
+            and row["provider_code"]
+            == "NAGAD_SIM"
+        )
+    ]
+
+    balance_by_agent = {
+        row["agent_code"]: row
+        for row in nagad_rows
+    }
+
+    assert len(balance_by_agent) == 4
+
+    assert (
+        balance_by_agent[
+            "AGENT-SYL-001"
+        ]["electronic_balance"]
+        == "20000.00"
+    )
+    assert (
+        balance_by_agent[
+            "AGENT-SYL-002"
+        ]["electronic_balance"]
+        == "120000.00"
+    )
+    assert (
+        balance_by_agent[
+            "AGENT-SYL-004"
+        ]["electronic_balance"]
+        == "150000.00"
+    )
+    assert (
+        balance_by_agent[
+            "AGENT-SYL-004"
+        ]["freshness_state"]
+        == "delayed"
+    )
+
+
+def test_network_ground_truth_describes_customer_request(
+    tmp_path: Path,
+) -> None:
+    """Ground truth should record the expected network outcome."""
+
+    generate_bundle(
+        output_directory=tmp_path,
+        seed=42,
+    )
+
+    ground_truth = json.loads(
+        (
+            tmp_path / "ground_truth.json"
+        ).read_text(
+            encoding="utf-8",
+        )
+    )
+
+    network_scenario = next(
+        scenario
+        for scenario in ground_truth["scenarios"]
+        if scenario["scenario_id"] == "NETWORK-001"
+    )
+
+    request = network_scenario[
+        "serviceability_request"
+    ]
+
+    assert (
+        request["requesting_agent_code"]
+        == "AGENT-SYL-001"
+    )
+    assert request["provider_code"] == "NAGAD_SIM"
+    assert request["requested_amount"] == "80000.00"
+    assert request["expected_shortfall"] == "60000.00"
+    assert (
+        request["expected_local_serviceable"]
+        is False
+    )
+    assert (
+        request["preferred_fresh_candidate"]
+        == "AGENT-SYL-002"
+    )
+    assert (
+        request["cash_out_candidate"]
+        == "AGENT-SYL-003"
+    )
+    assert (
+        request["stale_candidate"]
+        == "AGENT-SYL-004"
     )

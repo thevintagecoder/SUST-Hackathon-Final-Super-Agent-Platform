@@ -1,6 +1,40 @@
 {
-  "agent_code": "AGENT-SYL-001",
+  "agents": [
+    {
+      "agent_code": "AGENT-SYL-001",
+      "area": "Sylhet",
+      "is_active": "true",
+      "latitude": "24.894900",
+      "longitude": "91.868700",
+      "name": "Synthetic Zindabazar Agent"
+    },
+    {
+      "agent_code": "AGENT-SYL-002",
+      "area": "Sylhet",
+      "is_active": "true",
+      "latitude": "24.900100",
+      "longitude": "91.875200",
+      "name": "Synthetic Ambarkhana Agent"
+    },
+    {
+      "agent_code": "AGENT-SYL-003",
+      "area": "Sylhet",
+      "is_active": "true",
+      "latitude": "24.887200",
+      "longitude": "91.860400",
+      "name": "Synthetic Bondor Agent"
+    },
+    {
+      "agent_code": "AGENT-SYL-004",
+      "area": "Sylhet",
+      "is_active": "true",
+      "latitude": "24.908000",
+      "longitude": "91.852000",
+      "name": "Synthetic Shibgonj Agent"
+    }
+  ],
   "generated_at": "2026-07-11T08:00:00Z",
+  "primary_agent_code": "AGENT-SYL-001",
   "providers": [
     "BKASH_SIM",
     "NAGAD_SIM",
@@ -8,6 +42,9 @@
   ],
   "scenarios": [
     {
+      "agent_codes": [
+        "AGENT-SYL-001"
+      ],
       "anomaly_category": null,
       "anomaly_expected": false,
       "description": "Stable shared cash and healthy balances across all synthetic providers.",
@@ -18,6 +55,9 @@
       "scenario_id": "NORMAL-001"
     },
     {
+      "agent_codes": [
+        "AGENT-SYL-001"
+      ],
       "anomaly_category": null,
       "anomaly_expected": false,
       "description": "BKASH_SIM is under pressure while other provider balances remain healthy.",
@@ -28,6 +68,9 @@
       "scenario_id": "SHORTAGE-001"
     },
     {
+      "agent_codes": [
+        "AGENT-SYL-001"
+      ],
       "anomaly_category": "repeated_amounts",
       "anomaly_expected": true,
       "description": "Several similar BKASH_SIM cash-in transactions occur in a short time window.",
@@ -38,6 +81,9 @@
       "scenario_id": "REPEATED-001"
     },
     {
+      "agent_codes": [
+        "AGENT-SYL-001"
+      ],
       "anomaly_category": null,
       "anomaly_expected": false,
       "description": "ROCKET_SIM position data becomes delayed, reducing forecast confidence.",
@@ -46,7 +92,35 @@
       "injection_start_time": "2026-07-11T14:00:00Z",
       "name": "Delayed provider feed",
       "scenario_id": "STALE-001"
+    },
+    {
+      "agent_codes": [
+        "AGENT-SYL-001",
+        "AGENT-SYL-002",
+        "AGENT-SYL-003",
+        "AGENT-SYL-004"
+      ],
+      "anomaly_category": null,
+      "anomaly_expected": false,
+      "description": "AGENT-SYL-001 cannot serve a large Nagad cash-in. Nearby Agents have different provider-float, physical-cash, distance, and data-freshness characteristics.",
+      "expected_shortage_resource": "NAGAD_SIM",
+      "expected_shortage_time": null,
+      "injection_start_time": "2026-07-11T15:00:00Z",
+      "name": "Multi-Agent liquidity coordination",
+      "scenario_id": "NETWORK-001",
+      "serviceability_request": {
+        "cash_out_candidate": "AGENT-SYL-003",
+        "expected_local_serviceable": false,
+        "expected_shortfall": "60000.00",
+        "local_available_amount": "20000.00",
+        "preferred_fresh_candidate": "AGENT-SYL-002",
+        "provider_code": "NAGAD_SIM",
+        "requested_amount": "80000.00",
+        "requesting_agent_code": "AGENT-SYL-001",
+        "stale_candidate": "AGENT-SYL-004",
+        "transaction_type": "cash_in"
+      }
     }
   ],
-  "seed": 42
+  "seed": 100
 }

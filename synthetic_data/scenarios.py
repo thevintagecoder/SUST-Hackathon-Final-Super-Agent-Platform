@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 
 
 PROVIDER_CODES = (
@@ -9,8 +10,6 @@ PROVIDER_CODES = (
     "NAGAD_SIM",
     "ROCKET_SIM",
 )
-
-AGENT_CODE = "AGENT-SYL-001"
 
 BASE_TIME = datetime(
     2026,
@@ -20,6 +19,55 @@ BASE_TIME = datetime(
     0,
     tzinfo=UTC,
 )
+
+NETWORK_SCENARIO_ID = "NETWORK-001"
+
+
+@dataclass(frozen=True)
+class AgentDefinition:
+    """Describe one clearly synthetic demonstration Agent."""
+
+    agent_code: str
+    name: str
+    area: str
+    latitude: Decimal
+    longitude: Decimal
+    is_active: bool = True
+
+
+AGENTS = (
+    AgentDefinition(
+        agent_code="AGENT-SYL-001",
+        name="Synthetic Zindabazar Agent",
+        area="Sylhet",
+        latitude=Decimal("24.894900"),
+        longitude=Decimal("91.868700"),
+    ),
+    AgentDefinition(
+        agent_code="AGENT-SYL-002",
+        name="Synthetic Ambarkhana Agent",
+        area="Sylhet",
+        latitude=Decimal("24.900100"),
+        longitude=Decimal("91.875200"),
+    ),
+    AgentDefinition(
+        agent_code="AGENT-SYL-003",
+        name="Synthetic Bondor Agent",
+        area="Sylhet",
+        latitude=Decimal("24.887200"),
+        longitude=Decimal("91.860400"),
+    ),
+    AgentDefinition(
+        agent_code="AGENT-SYL-004",
+        name="Synthetic Shibgonj Agent",
+        area="Sylhet",
+        latitude=Decimal("24.908000"),
+        longitude=Decimal("91.852000"),
+    ),
+)
+
+# Kept for compatibility with existing single-Agent scenarios.
+AGENT_CODE = AGENTS[0].agent_code
 
 
 @dataclass(frozen=True)
@@ -119,6 +167,27 @@ SCENARIOS = (
             7,
             11,
             14,
+            0,
+            tzinfo=UTC,
+        ),
+        expected_shortage_time=None,
+    ),
+    ScenarioDefinition(
+        scenario_id=NETWORK_SCENARIO_ID,
+        name="Multi-Agent liquidity coordination",
+        description=(
+            "AGENT-SYL-001 cannot serve a large Nagad cash-in. "
+            "Nearby Agents have different provider-float, physical-"
+            "cash, distance, and data-freshness characteristics."
+        ),
+        anomaly_expected=False,
+        anomaly_category=None,
+        expected_shortage_resource="NAGAD_SIM",
+        injection_start_time=datetime(
+            2026,
+            7,
+            11,
+            15,
             0,
             tzinfo=UTC,
         ),

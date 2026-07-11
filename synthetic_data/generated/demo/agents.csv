@@ -1,0 +1,5 @@
+agent_code,name,area,latitude,longitude,is_active
+AGENT-SYL-001,Synthetic Zindabazar Agent,Sylhet,24.894900,91.868700,true
+AGENT-SYL-002,Synthetic Ambarkhana Agent,Sylhet,24.900100,91.875200,true
+AGENT-SYL-003,Synthetic Bondor Agent,Sylhet,24.887200,91.860400,true
+AGENT-SYL-004,Synthetic Shibgonj Agent,Sylhet,24.908000,91.852000,true
