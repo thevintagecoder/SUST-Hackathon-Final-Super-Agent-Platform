@@ -1,0 +1,18 @@
+# Python virtual environment
+.venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Test cache
+.pytest_cache/
+
+# Environment variables and secrets
+.env
+
+# macOS-generated file
+.DS_Store
+
+# Editor settings
+.vscode/
