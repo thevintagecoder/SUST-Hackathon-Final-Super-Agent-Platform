@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,14 +23,21 @@ from backend.app.schemas.dashboard import (
     AgentIdentityResponse,
     AgentRiskSummary,
     DashboardAlertItem,
-    ProviderBalanceCard,
-    SharedCashCard,
     OperationsAgentRiskRow,
     OperationsAlertItem,
     OperationsDashboardResponse,
     OperationsSummaryResponse,
+    ProviderAgentBalanceRow,
+    ProviderBalanceCard,
+    ProviderDashboardAlertItem,
+    ProviderDashboardResponse,
+    ProviderDashboardSummaryResponse,
+    ProviderIdentityResponse,
+    SharedCashCard,
 )
-
+from backend.app.services.network_service import (
+    PROVIDER_FLOAT_SAFETY_RESERVE,
+)
 
 SEVERITY_ORDER = {
     "LOW": 1,
@@ -814,5 +822,357 @@ def get_operations_dashboard(
             "Synthetic demonstration data only. "
             "Human review is required before any "
             "operational decision."
+        ),
+    )
+def find_dashboard_provider(
+    *,
+    db: Session,
+    provider_code: str,
+) -> Provider:
+    """Return a provider for dashboard display."""
+
+    provider = db.scalar(
+        select(Provider).where(
+            Provider.code == provider_code
+        )
+    )
+
+    if provider is None:
+        raise DashboardNotFoundError(
+            f"Provider '{provider_code}' was not found."
+        )
+
+    return provider
+
+
+def get_provider_dashboard(
+    *,
+    db: Session,
+    provider_code: str,
+    scenario_id: str | None = None,
+    recent_alert_limit: int = 10,
+) -> ProviderDashboardResponse:
+    """Build one provider stakeholder dashboard."""
+
+    provider = find_dashboard_provider(
+        db=db,
+        provider_code=provider_code,
+    )
+
+    balance_statement = (
+        select(
+            ProviderBalance,
+            Agent,
+        )
+        .join(
+            Agent,
+            ProviderBalance.agent_id
+            == Agent.id,
+        )
+        .where(
+            ProviderBalance.provider_id
+            == provider.id
+        )
+        .order_by(
+            Agent.code
+        )
+    )
+
+    balance_rows = db.execute(
+        balance_statement
+    ).all()
+
+    alert_statement = (
+        select(Alert)
+        .where(
+            Alert.provider_id == provider.id,
+            Alert.status != "RESOLVED",
+        )
+        .order_by(
+            Alert.created_at.desc(),
+            Alert.id.desc(),
+        )
+    )
+
+    if scenario_id is not None:
+        alert_statement = (
+            alert_statement.where(
+                Alert.scenario_id
+                == scenario_id
+            )
+        )
+
+    active_alerts = list(
+        db.scalars(
+            alert_statement
+        ).all()
+    )
+
+    alerts_by_agent: dict[
+        int,
+        list[Alert],
+    ] = {}
+
+    for alert in active_alerts:
+        alerts_by_agent.setdefault(
+            alert.agent_id,
+            [],
+        ).append(
+            alert
+        )
+
+    agent_codes = {
+        agent.id: agent.code
+        for _, agent in balance_rows
+    }
+
+    agent_balance_items: list[
+        ProviderAgentBalanceRow
+    ] = []
+
+    for balance, agent in balance_rows:
+        agent_alerts = (
+            alerts_by_agent.get(
+                agent.id,
+                [],
+            )
+        )
+
+        electronic_balance = Decimal(
+            str(
+                balance.electronic_balance
+            )
+        )
+
+        agent_balance_items.append(
+            ProviderAgentBalanceRow(
+                agent_code=agent.code,
+                agent_name=agent.name,
+                area=agent.area,
+                is_active=agent.is_active,
+                electronic_balance=(
+                    electronic_balance
+                ),
+                prototype_safety_threshold=(
+                    PROVIDER_FLOAT_SAFETY_RESERVE
+                ),
+                at_or_below_safety_threshold=(
+                    electronic_balance
+                    <= PROVIDER_FLOAT_SAFETY_RESERVE
+                ),
+                freshness_state=(
+                    balance.freshness_state
+                    or "missing"
+                ),
+                last_update_at=(
+                    balance.last_update_at
+                ),
+                active_alert_count=(
+                    len(agent_alerts)
+                ),
+                highest_active_severity=(
+                    highest_severity(
+                        agent_alerts
+                    )
+                ),
+                human_review_required=any(
+                    alert
+                    .human_review_required
+                    for alert in agent_alerts
+                ),
+            )
+        )
+
+    agent_balance_items.sort(
+        key=lambda row: (
+            -SEVERITY_ORDER.get(
+                row.highest_active_severity
+                or "",
+                0,
+            ),
+            (
+                0
+                if row
+                .at_or_below_safety_threshold
+                else 1
+            ),
+            (
+                0
+                if row.freshness_state
+                != "fresh"
+                else 1
+            ),
+            row.agent_code,
+        )
+    )
+
+    recent_alerts = [
+        ProviderDashboardAlertItem(
+            id=alert.id,
+            agent_code=agent_codes.get(
+                alert.agent_id,
+                f"AGENT-{alert.agent_id}",
+            ),
+            alert_type=alert.alert_type,
+            severity=alert.severity,
+            status=alert.status,
+            scenario_id=alert.scenario_id,
+            title=build_alert_title(
+                alert
+            ),
+            confidence=alert.confidence,
+            freshness_state=(
+                alert.freshness_state
+            ),
+            assigned_to=alert.assigned_to,
+            created_at=alert.created_at,
+            human_review_required=(
+                alert.human_review_required
+            ),
+            automatic_action_taken=(
+                alert.automatic_action_taken
+            ),
+        )
+        for alert in active_alerts[
+            :recent_alert_limit
+        ]
+    ]
+
+    total_electronic_balance = sum(
+        (
+            Decimal(
+                str(
+                    balance.electronic_balance
+                )
+            )
+            for balance, _ in balance_rows
+        ),
+        Decimal("0.00"),
+    )
+
+    at_or_below_count = sum(
+        Decimal(
+            str(
+                balance.electronic_balance
+            )
+        )
+        <= PROVIDER_FLOAT_SAFETY_RESERVE
+        for balance, _ in balance_rows
+    )
+
+    fresh_balance_count = sum(
+        (
+            balance.freshness_state
+            or "missing"
+        )
+        == "fresh"
+        for balance, _ in balance_rows
+    )
+
+    non_fresh_balance_count = (
+        len(balance_rows)
+        - fresh_balance_count
+    )
+
+    update_candidates = [
+        normalize_dashboard_datetime(
+            balance.last_update_at
+        )
+        for balance, _ in balance_rows
+    ]
+
+    update_candidates.extend(
+        normalize_dashboard_datetime(
+            alert.updated_at
+        )
+        for alert in active_alerts
+    )
+
+    last_updated_at = (
+        max(
+            update_candidates
+        )
+        if update_candidates
+        else None
+    )
+
+    return ProviderDashboardResponse(
+        provider=ProviderIdentityResponse(
+            code=provider.code,
+            name=provider_display_name(
+                provider
+            ),
+        ),
+        summary=(
+            ProviderDashboardSummaryResponse(
+                agents_with_balance=(
+                    len(balance_rows)
+                ),
+                total_electronic_balance=(
+                    total_electronic_balance
+                ),
+                prototype_safety_threshold=(
+                    PROVIDER_FLOAT_SAFETY_RESERVE
+                ),
+                at_or_below_safety_threshold_count=(
+                    at_or_below_count
+                ),
+                fresh_balance_count=(
+                    fresh_balance_count
+                ),
+                non_fresh_balance_count=(
+                    non_fresh_balance_count
+                ),
+                active_alert_count=(
+                    len(active_alerts)
+                ),
+                open_alert_count=sum(
+                    alert.status == "OPEN"
+                    for alert in active_alerts
+                ),
+                escalated_alert_count=sum(
+                    alert.status
+                    == "ESCALATED"
+                    for alert in active_alerts
+                ),
+                high_or_critical_alert_count=sum(
+                    alert.severity
+                    in {
+                        "HIGH",
+                        "CRITICAL",
+                    }
+                    for alert in active_alerts
+                ),
+                human_review_required_count=sum(
+                    alert
+                    .human_review_required
+                    for alert in active_alerts
+                ),
+                severity_counts=(
+                    build_severity_counts(
+                        active_alerts
+                    )
+                ),
+                alert_type_counts=(
+                    build_alert_type_counts(
+                        active_alerts
+                    )
+                ),
+                automatic_action_taken=False,
+            )
+        ),
+        agent_balances=(
+            agent_balance_items
+        ),
+        recent_alerts=recent_alerts,
+        scenario_id=scenario_id,
+        last_updated_at=last_updated_at,
+        generated_at=datetime.now(
+            UTC
+        ),
+        synthetic_data_notice=(
+            "Synthetic demonstration data only. "
+            "Provider balances are decision-support "
+            "signals and require human confirmation."
         ),
     )

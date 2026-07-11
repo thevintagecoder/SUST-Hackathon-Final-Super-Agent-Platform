@@ -189,3 +189,109 @@ class OperationsDashboardResponse(BaseModel):
     generated_at: datetime
 
     synthetic_data_notice: str
+
+
+class ProviderIdentityResponse(BaseModel):
+    """Return provider identity information."""
+
+    code: str
+    name: str
+
+
+class ProviderDashboardSummaryResponse(BaseModel):
+    """Summarize one provider's liquidity and risk state."""
+
+    agents_with_balance: int
+
+    total_electronic_balance: Decimal
+
+    prototype_safety_threshold: Decimal
+
+    at_or_below_safety_threshold_count: int
+
+    fresh_balance_count: int
+    non_fresh_balance_count: int
+
+    active_alert_count: int
+    open_alert_count: int
+    escalated_alert_count: int
+
+    high_or_critical_alert_count: int
+    human_review_required_count: int
+
+    severity_counts: dict[str, int]
+    alert_type_counts: dict[str, int]
+
+    automatic_action_taken: bool = False
+
+
+class ProviderAgentBalanceRow(BaseModel):
+    """Return one Agent's balance for the selected provider."""
+
+    agent_code: str
+    agent_name: str
+    area: str
+    is_active: bool
+
+    electronic_balance: Decimal
+
+    prototype_safety_threshold: Decimal
+
+    at_or_below_safety_threshold: bool
+
+    freshness_state: str
+    last_update_at: datetime
+
+    active_alert_count: int
+
+    highest_active_severity: AlertSeverity | None
+
+    human_review_required: bool
+
+
+class ProviderDashboardAlertItem(BaseModel):
+    """Return one provider-related active alert."""
+
+    id: int
+
+    agent_code: str
+
+    alert_type: AlertType
+    severity: AlertSeverity
+    status: AlertStatus
+
+    scenario_id: str | None
+
+    title: LocalizedAlertText
+
+    confidence: Decimal
+    freshness_state: str | None
+
+    assigned_to: str | None
+    created_at: datetime
+
+    human_review_required: bool
+    automatic_action_taken: bool
+
+
+class ProviderDashboardResponse(BaseModel):
+    """Return one provider stakeholder dashboard."""
+
+    provider: ProviderIdentityResponse
+
+    summary: ProviderDashboardSummaryResponse
+
+    agent_balances: list[
+        ProviderAgentBalanceRow
+    ]
+
+    recent_alerts: list[
+        ProviderDashboardAlertItem
+    ]
+
+    scenario_id: str | None
+
+    last_updated_at: datetime | None
+    generated_at: datetime
+
+    synthetic_data_notice: str

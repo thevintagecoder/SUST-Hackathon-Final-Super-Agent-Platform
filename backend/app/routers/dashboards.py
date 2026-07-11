@@ -13,11 +13,13 @@ from backend.app.db.session import get_db
 from backend.app.schemas.dashboard import (
     AgentDashboardResponse,
     OperationsDashboardResponse,
+    ProviderDashboardResponse,
 )
 from backend.app.services.dashboard_service import (
     DashboardNotFoundError,
     get_agent_dashboard,
     get_operations_dashboard,
+    get_provider_dashboard,
 )
 
 
@@ -97,3 +99,43 @@ def read_operations_dashboard(
             recent_alert_limit
         ),
     )
+@router.get(
+    "/providers/{provider_code}",
+    response_model=ProviderDashboardResponse,
+    status_code=status.HTTP_200_OK,
+)
+def read_provider_dashboard(
+    provider_code: str,
+    scenario_id: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=50,
+    ),
+    recent_alert_limit: int = Query(
+        default=10,
+        ge=1,
+        le=50,
+    ),
+    db: Session = Depends(
+        get_db
+    ),
+) -> ProviderDashboardResponse:
+    """Return one provider stakeholder dashboard."""
+
+    try:
+        return get_provider_dashboard(
+            db=db,
+            provider_code=provider_code,
+            scenario_id=scenario_id,
+            recent_alert_limit=(
+                recent_alert_limit
+            ),
+        )
+
+    except DashboardNotFoundError as error:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=str(error),
+        ) from error
