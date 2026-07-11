@@ -132,6 +132,27 @@ class MockDataProvider:
             "message": "Case note added.",
         }
 
+    def assign_case(self, case_id: int, owner: str) -> dict:
+        cleaned_owner = owner.strip()
+        if not cleaned_owner:
+            raise ValueError("Case owner must not be empty.")
+
+        case = self._load_case(case_id)
+        case["owner"] = cleaned_owner
+        case["timeline"].append(
+            {
+                "event": "assigned",
+                "actor": "system",
+                "at": self._now_iso(),
+                "note": f"Case assigned to {cleaned_owner}",
+            }
+        )
+        self._cases[case_id] = case
+        return {
+            "success": True,
+            "message": f"Case {case_id} assigned to {cleaned_owner}.",
+        }
+
     def update_case_status(self, case_id: int, status: str) -> dict:
         allowed_statuses = {
             "investigating",

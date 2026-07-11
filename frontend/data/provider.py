@@ -28,3 +28,6 @@ class DataProvider(Protocol):
 
     def update_case_status(self, case_id: int, status: str) -> dict:
         """Update one case status and append a timeline event."""
+
+    def assign_case(self, case_id: int, owner: str) -> dict:
+        """Assign one case to a new owner and append a timeline event."""

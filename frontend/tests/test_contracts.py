@@ -85,10 +85,16 @@ def test_mock_provider_mutations() -> None:
         "Checked local event schedule",
     )
     status_result = provider.update_case_status(501, "escalated")
+    assign_result = provider.assign_case(501, "ops-user-03")
 
     assert acknowledge_result["success"] is True
     assert note_result["success"] is True
     assert status_result["success"] is True
+    assert assign_result["success"] is True
+
+    case_after_assign = provider.get_case(501)
+    assert case_after_assign["owner"] == "ops-user-03"
+    assert case_after_assign["timeline"][-1]["event"] == "assigned"
 
     alerts = provider.list_alerts()
     alert = next(item for item in alerts if item["id"] == 101)
@@ -96,4 +102,5 @@ def test_mock_provider_mutations() -> None:
 
     case = provider.get_case(501)
     assert case["status"] == "escalated"
-    assert case["timeline"][-1]["event"] == "status"
+    timeline_events = [event["event"] for event in case["timeline"]]
+    assert "status" in timeline_events

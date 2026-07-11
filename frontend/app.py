@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from frontend.config import API_BASE_URL, DATA_MODE, get_provider
+from frontend.config import API_BASE_URL, DATA_MODE
 
 st.set_page_config(
     page_title="Super Agent Liquidity & Risk Intelligence",
@@ -28,63 +28,61 @@ st.warning(
     "It does not connect to real accounts or determine fraud."
 )
 
+st.caption(
+    "Analytics pages (Home, Liquidity Forecast, Anomaly Alerts, Agent "
+    "Risk Explorer) compute directly from the synthetic scenario dataset "
+    "via the shared core/ package."
+)
+
 if DATA_MODE == "mock":
     st.success(
-        "Data mode: **mock** — showing local demonstration data from "
+        "Data mode: **mock** — case-management workflow data comes from "
         "frontend/mock_data/. No backend is required."
     )
 else:
     st.info(
-        f"Data mode: **api** — reading live data from FastAPI at "
-        f"{API_BASE_URL}. If the backend is unavailable, pages will show "
-        "an error instead of falling back to mock data."
+        f"Data mode: **api** — case-management workflow data is read from "
+        f"FastAPI at {API_BASE_URL}. If the backend is unavailable, that "
+        "page shows an error instead of falling back to mock data."
     )
 
 with st.sidebar:
     st.subheader("Session")
     st.info(f"Data mode: **{DATA_MODE}**")
 
-    try:
-        overview = get_provider().get_overview()
-        agent = overview.get("agent", {})
-        st.metric("Agent", agent.get("code", "—"))
-        st.caption(agent.get("name", ""))
-        st.caption(f"Area: {agent.get('area', '—')}")
-    except Exception as exc:
-        st.error(str(exc))
-        if DATA_MODE == "api":
-            st.info(
-                "The backend appears unavailable. Restart with "
-                "DATA_MODE=mock to preview the UI without FastAPI."
-            )
-
-operations_page = st.Page(
-    "pages/1_Operations_Overview.py",
-    title="Operations Overview",
-    icon="📋",
+home_page = st.Page(
+    "pages/Home.py",
+    title="Home",
+    icon="🏠",
     default=True,
 )
-liquidity_page = st.Page(
-    "pages/2_Liquidity.py",
-    title="Liquidity",
+forecast_page = st.Page(
+    "pages/1_Liquidity_Forecast.py",
+    title="Liquidity Forecast",
     icon="💧",
 )
 anomaly_page = st.Page(
-    "pages/3_Anomaly_Review.py",
-    title="Anomaly Review",
+    "pages/2_Anomaly_Alerts.py",
+    title="Anomaly Alerts",
     icon="🔍",
 )
+risk_page = st.Page(
+    "pages/3_Agent_Risk_Explorer.py",
+    title="Agent Risk Explorer",
+    icon="🧭",
+)
 case_page = st.Page(
-    "pages/4_Case_Management.py",
-    title="Case Management",
+    "pages/4_Admin_Case_Management.py",
+    title="Admin Case Management",
     icon="📁",
 )
 
 navigation = st.navigation(
     [
-        operations_page,
-        liquidity_page,
+        home_page,
+        forecast_page,
         anomaly_page,
+        risk_page,
         case_page,
     ],
     position="top",

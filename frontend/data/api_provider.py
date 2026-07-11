@@ -103,6 +103,16 @@ class ApiDataProvider:
             raise ApiDataError("Add-note endpoint did not return an object.")
         return payload
 
+    def assign_case(self, case_id: int, owner: str) -> dict:
+        payload = self._request(
+            "POST",
+            f"/dashboard/cases/{case_id}/assign",
+            json_body={"owner": owner},
+        )
+        if not isinstance(payload, dict):
+            raise ApiDataError("Assign endpoint did not return an object.")
+        return payload
+
     def update_case_status(self, case_id: int, status: str) -> dict:
         payload = self._request(
             "PATCH",

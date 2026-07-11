@@ -47,16 +47,26 @@ to mock data.
 ## Pages
 
 Navigation is registered explicitly in `frontend/app.py` using
-`st.navigation`. The sidebar shows:
+`st.navigation`:
 
-1. Operations Overview
-2. Liquidity
-3. Anomaly Review
-4. Case Management
+1. Home — unified shared cash + provider balance view
+2. Liquidity Forecast — projection chart + plain-language runway panel
+3. Anomaly Alerts — unusual-activity flags with expandable evidence
+4. Agent Risk Explorer — score breakdown + EN/Bangla narrative
+5. Admin Case Management — assign/acknowledge/escalate/resolve + history
 
-## Data-provider abstraction
+## Data architecture
 
-All pages use `get_provider()` from `frontend/config.py`.
+Analytics pages (Home, Liquidity Forecast, Anomaly Alerts, Agent Risk
+Explorer) import forecasting, anomaly-detection, risk-scoring, and
+narrative logic from the shared `core/` package at the repository root.
+`core/` reads the deterministic synthetic dataset in
+`synthetic_data/generated/demo/` and contains no Streamlit imports.
+Shared sidebar filters (scenario, agent, provider, horizon) live in
+`frontend/components/filters.py`.
+
+The Admin Case Management page keeps the data-provider abstraction for
+workflow data, using `get_provider()` from `frontend/config.py`.
 
 | Mode | Implementation | Source |
 |------|----------------|--------|
@@ -75,6 +85,7 @@ These paths are expected from FastAPI in API mode:
 | `GET` | `/dashboard/cases/{case_id}` |
 | `POST` | `/dashboard/alerts/{alert_id}/acknowledge` |
 | `POST` | `/dashboard/cases/{case_id}/notes` |
+| `POST` | `/dashboard/cases/{case_id}/assign` |
 | `PATCH` | `/dashboard/cases/{case_id}/status` |
 
 HTTP calls are isolated in `frontend/data/api_provider.py`.
