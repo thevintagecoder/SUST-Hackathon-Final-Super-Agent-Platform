@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, pool
 
 from backend.app.core.config import get_settings
 from backend.app.db.session import build_database_url
-from backend.app.models import Agent
+from backend.app import models
 
 
 config = context.config
@@ -15,7 +15,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Agent.metadata
+target_metadata = models.Agent.metadata
 
 
 def run_migrations_offline() -> None:
