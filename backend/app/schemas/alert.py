@@ -200,3 +200,65 @@ class AlertListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+class AlertActorRequest(BaseModel):
+    """Identify the person performing an alert action."""
+
+    actor: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+
+    note: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
+class AlertAssignmentRequest(BaseModel):
+    """Assign an alert to a human owner."""
+
+    actor: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+
+    assigned_to: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+
+    note: str | None = Field(
+        default=None,
+        max_length=2000,
+    )
+
+
+class AlertNoteRequest(BaseModel):
+    """Add an audit note without changing alert status."""
+
+    actor: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+
+    note: str = Field(
+        min_length=1,
+        max_length=2000,
+    )
+
+
+class AlertWorkflowResponse(BaseModel):
+    """Return the result of one alert workflow action."""
+
+    alert_id: int
+    status: AlertStatus
+    assigned_to: str | None
+
+    acknowledged_at: datetime | None
+    resolved_at: datetime | None
+
+    event: AlertEventResponse
+
+    human_review_required: bool
+    automatic_action_taken: bool

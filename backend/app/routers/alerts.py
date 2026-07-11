@@ -11,12 +11,16 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.schemas.alert import (
+    AlertActorRequest,
+    AlertAssignmentRequest,
     AlertDetailResponse,
     AlertGenerationRequest,
     AlertGenerationResponse,
     AlertListResponse,
+    AlertNoteRequest,
     AlertStatus,
     AlertType,
+    AlertWorkflowResponse,
 )
 from backend.app.services.alert_generation_service import (
     AlertGenerationDataUnavailableError,
@@ -31,6 +35,15 @@ from backend.app.services.alert_service import (
 )
 from backend.app.services.alert_templates import (
     AlertTemplateError,
+)
+from backend.app.services.alert_workflow_service import (
+    AlertWorkflowNotFoundError,
+    AlertWorkflowValidationError,
+    acknowledge_alert,
+    add_alert_note,
+    assign_alert,
+    escalate_alert,
+    resolve_alert,
 )
 from backend.app.services.anomaly_service import (
     AnomalyNotFoundError,
@@ -56,9 +69,7 @@ router = APIRouter(
 )
 def generate_alert(
     request: AlertGenerationRequest,
-    db: Session = Depends(
-        get_db
-    ),
+    db: Session = Depends(get_db),
 ) -> AlertGenerationResponse:
     """Evaluate evidence and persist an alert when needed."""
 
@@ -74,9 +85,7 @@ def generate_alert(
         AnomalyNotFoundError,
     ) as error:
         raise HTTPException(
-            status_code=(
-                http_status.HTTP_404_NOT_FOUND
-            ),
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail=str(error),
         ) from error
 
@@ -97,9 +106,7 @@ def generate_alert(
         ValueError,
     ) as error:
         raise HTTPException(
-            status_code=(
-                http_status.HTTP_400_BAD_REQUEST
-            ),
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
 
@@ -141,9 +148,7 @@ def read_alerts(
         default=0,
         ge=0,
     ),
-    db: Session = Depends(
-        get_db
-    ),
+    db: Session = Depends(get_db),
 ) -> AlertListResponse:
     """List alerts using optional workflow filters."""
 
@@ -159,6 +164,162 @@ def read_alerts(
     )
 
 
+def raise_workflow_error(
+    error: Exception,
+) -> None:
+    """Map workflow service errors to HTTP errors."""
+
+    if isinstance(
+        error,
+        AlertWorkflowNotFoundError,
+    ):
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    raise HTTPException(
+        status_code=http_status.HTTP_400_BAD_REQUEST,
+        detail=str(error),
+    ) from error
+
+
+@router.post(
+    "/{alert_id}/acknowledge",
+    response_model=AlertWorkflowResponse,
+    status_code=http_status.HTTP_200_OK,
+)
+def acknowledge_alert_route(
+    alert_id: int,
+    request: AlertActorRequest,
+    db: Session = Depends(get_db),
+) -> AlertWorkflowResponse:
+    """Record that a human acknowledged an alert."""
+
+    try:
+        return acknowledge_alert(
+            db=db,
+            alert_id=alert_id,
+            actor=request.actor,
+            note=request.note,
+        )
+
+    except (
+        AlertWorkflowNotFoundError,
+        AlertWorkflowValidationError,
+    ) as error:
+        raise_workflow_error(error)
+
+
+@router.post(
+    "/{alert_id}/assign",
+    response_model=AlertWorkflowResponse,
+    status_code=http_status.HTTP_200_OK,
+)
+def assign_alert_route(
+    alert_id: int,
+    request: AlertAssignmentRequest,
+    db: Session = Depends(get_db),
+) -> AlertWorkflowResponse:
+    """Assign an alert to a human owner."""
+
+    try:
+        return assign_alert(
+            db=db,
+            alert_id=alert_id,
+            actor=request.actor,
+            assigned_to=request.assigned_to,
+            note=request.note,
+        )
+
+    except (
+        AlertWorkflowNotFoundError,
+        AlertWorkflowValidationError,
+    ) as error:
+        raise_workflow_error(error)
+
+
+@router.post(
+    "/{alert_id}/notes",
+    response_model=AlertWorkflowResponse,
+    status_code=http_status.HTTP_200_OK,
+)
+def add_alert_note_route(
+    alert_id: int,
+    request: AlertNoteRequest,
+    db: Session = Depends(get_db),
+) -> AlertWorkflowResponse:
+    """Append an audit note to an alert."""
+
+    try:
+        return add_alert_note(
+            db=db,
+            alert_id=alert_id,
+            actor=request.actor,
+            note=request.note,
+        )
+
+    except (
+        AlertWorkflowNotFoundError,
+        AlertWorkflowValidationError,
+    ) as error:
+        raise_workflow_error(error)
+
+
+@router.post(
+    "/{alert_id}/escalate",
+    response_model=AlertWorkflowResponse,
+    status_code=http_status.HTTP_200_OK,
+)
+def escalate_alert_route(
+    alert_id: int,
+    request: AlertActorRequest,
+    db: Session = Depends(get_db),
+) -> AlertWorkflowResponse:
+    """Escalate an unresolved alert."""
+
+    try:
+        return escalate_alert(
+            db=db,
+            alert_id=alert_id,
+            actor=request.actor,
+            note=request.note,
+        )
+
+    except (
+        AlertWorkflowNotFoundError,
+        AlertWorkflowValidationError,
+    ) as error:
+        raise_workflow_error(error)
+
+
+@router.post(
+    "/{alert_id}/resolve",
+    response_model=AlertWorkflowResponse,
+    status_code=http_status.HTTP_200_OK,
+)
+def resolve_alert_route(
+    alert_id: int,
+    request: AlertActorRequest,
+    db: Session = Depends(get_db),
+) -> AlertWorkflowResponse:
+    """Resolve an alert after human review."""
+
+    try:
+        return resolve_alert(
+            db=db,
+            alert_id=alert_id,
+            actor=request.actor,
+            note=request.note,
+        )
+
+    except (
+        AlertWorkflowNotFoundError,
+        AlertWorkflowValidationError,
+    ) as error:
+        raise_workflow_error(error)
+
+
 @router.get(
     "/{alert_id}",
     response_model=AlertDetailResponse,
@@ -166,9 +327,7 @@ def read_alerts(
 )
 def read_alert_detail(
     alert_id: int,
-    db: Session = Depends(
-        get_db
-    ),
+    db: Session = Depends(get_db),
 ) -> AlertDetailResponse:
     """Return one alert and its review timeline."""
 
@@ -180,8 +339,6 @@ def read_alert_detail(
 
     except AlertNotFoundError as error:
         raise HTTPException(
-            status_code=(
-                http_status.HTTP_404_NOT_FOUND
-            ),
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail=str(error),
         ) from error
