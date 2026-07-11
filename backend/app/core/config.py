@@ -1,0 +1,39 @@
+"""Application configuration loaded from environment variables."""
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+class Settings(BaseSettings):
+    """Validated configuration for the FastAPI application."""
+
+    name: str = "Super Agent Liquidity & Risk Intelligence API"
+    environment: Literal[
+        "development",
+        "testing",
+        "staging",
+        "production",
+    ] = "development"
+    version: str = "0.1.0"
+    debug: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        env_prefix="APP_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Load and cache the application settings."""
+
+    return Settings()

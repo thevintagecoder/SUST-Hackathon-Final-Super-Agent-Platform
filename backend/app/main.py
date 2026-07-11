@@ -3,6 +3,8 @@
 from fastapi import FastAPI, status
 from pydantic import BaseModel
 
+from backend.app.core.config import get_settings
+
 
 class HealthResponse(BaseModel):
     """Response returned when the API is operating normally."""
@@ -10,9 +12,12 @@ class HealthResponse(BaseModel):
     status: str
 
 
+settings = get_settings()
+
 app = FastAPI(
-    title="Super Agent Liquidity & Risk Intelligence API",
-    version="0.1.0",
+    title=settings.name,
+    version=settings.version,
+    debug=settings.debug,
     description=(
         "Decision-support API for a simulated multi-provider agent ecosystem. "
         "This prototype uses synthetic data and does not execute financial actions."
@@ -22,7 +27,7 @@ app = FastAPI(
 
 @app.get(
     "/health",
-    response_model=HealthResponse, #a pydantic schema 
+    response_model=HealthResponse,
     status_code=status.HTTP_200_OK,
     tags=["System"],
 )

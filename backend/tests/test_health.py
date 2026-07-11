@@ -18,7 +18,7 @@ def test_health_check_returns_ok() -> None:
 
 
 def test_health_check_rejects_post_requests() -> None:
-    """The health endpoint should not accept an unsupported HTTP method."""
+    """The health endpoint should reject unsupported HTTP methods."""
 
     response = client.post("/health")
 
