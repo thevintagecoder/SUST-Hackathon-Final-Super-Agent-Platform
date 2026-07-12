@@ -16,6 +16,10 @@ This project:
 - does not determine or declare fraud;
 - requires human review for risk-related decisions.
 
+> **Data notice:** This prototype uses deterministic synthetic demonstration
+> data only. It does not connect to real wallets, provider accounts, customer
+> records, or settlement systems.
+
 ## Current development status
 
 Completed:
