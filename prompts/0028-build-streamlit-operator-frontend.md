@@ -116,10 +116,10 @@ PostgreSQL rather than in Git.
 
 ## SonarQube result
 
-Pending — to be recorded after this commit is pushed and analyzed.
+Recorded after push to `main`.
 
 Example:
 
-- GitHub Actions: pending
-- Quality Gate: pending
-- Commit: pending
+- GitHub Actions: passed (see repository Actions for commit `3d194d2`)
+- Quality Gate: see SonarQube analysis for commit `3d194d2`
+- Commit: `3d194d2`

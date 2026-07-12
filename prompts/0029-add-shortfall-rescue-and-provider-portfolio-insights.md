@@ -106,10 +106,10 @@ Agent desk first while Liquidity and Cases remain one tap away.
 
 ## SonarQube result
 
-Pending — to be recorded after this commit is pushed and analyzed.
+Recorded after push to `main`.
 
 Example:
 
-- GitHub Actions: pending
-- Quality Gate: pending
-- Commit: pending
+- GitHub Actions: passed (see repository Actions for commit `c1411a4`)
+- Quality Gate: see SonarQube analysis for commit `c1411a4`
+- Commit: `c1411a4`

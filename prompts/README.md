@@ -158,5 +158,12 @@ documented separately in:
 prompts/legacy-commits.md
 ```
 
+Prompt records added after the related code was already pushed are
+documented in:
+
+```text
+prompts/retroactive-commits.md
+```
+
 Published Git history will not be rewritten unless the judging panel
 explicitly requires it.
