@@ -21,6 +21,7 @@ from frontend.components.common import (
     TRANSACTION_TYPES,
     DemoRecipe,
     agent_display_name,
+    cached_evaluation_dashboard,
     freshness_label,
     money,
     optional_text,
@@ -97,8 +98,52 @@ def render_anomalies(client: BackendClient) -> None:
         unsafe_allow_html=True,
     )
     safety_notice()
+    _render_anomaly_quality_disclosure(client)
     render_scenario_context()
     _render_anomaly(client)
+
+
+def _render_anomaly_quality_disclosure(client: BackendClient) -> None:
+    """Show controlled benchmark false-positive metrics on the main demo path."""
+
+    data = cached_evaluation_dashboard(client.base_url)
+    if not data:
+        return
+
+    anomaly = data.get("anomaly", {})
+    checks = data.get("responsible_ai_checks", {})
+    scenarios = anomaly.get("evaluated_scenarios") or []
+
+    st.markdown("#### Prototype quality (controlled synthetic benchmark)")
+    st.caption(
+        "Rule-based flags mean review — not confirmed fraud. "
+        "Metrics below come from GET /dashboards/evaluation."
+    )
+
+    cols = st.columns(4)
+    cols[0].metric("False positives", anomaly.get("false_positive", 0))
+    cols[1].metric(
+        "False positive rate",
+        anomaly.get("false_positive_rate", "—"),
+    )
+    cols[2].metric("Precision", anomaly.get("precision", "—"))
+    cols[3].metric("Recall", anomaly.get("recall", "—"))
+
+    scenario_line = (
+        f" Scenarios: {', '.join(scenarios)}."
+        if scenarios
+        else ""
+    )
+    if checks.get("anomaly_declared_as_confirmed_fraud") is False:
+        st.info(
+            "This prototype never auto-labels fraud. "
+            f"On the synthetic benchmark, false positive rate is "
+            f"{anomaly.get('false_positive_rate', '—')}"
+            f" ({anomaly.get('false_positive', 0)} false alarm(s) on "
+            f"NORMAL-001 vs {anomaly.get('true_positive', 0)} intended "
+            f"flag on REPEATED-001).{scenario_line} Human review is still "
+            "required for every flag."
+        )
 
 
 # ── Serviceability ────────────────────────────────────────────────────────────
@@ -930,6 +975,15 @@ def _render_anomaly_result(result: dict, provider_code: str) -> None:
 
     if result.get("warning_message"):
         st.caption(result["warning_message"])
+
+    if result.get("uncertainty"):
+        st.warning(str(result["uncertainty"]))
+
+    if result.get("confidence") is not None:
+        st.caption(f"Prototype confidence: {result['confidence']}")
+
+    if result.get("decision"):
+        st.caption(f"Decision: {str(result['decision']).replace('_', ' ')}")
 
     factors = result.get("explanation_factors", [])
     if factors:

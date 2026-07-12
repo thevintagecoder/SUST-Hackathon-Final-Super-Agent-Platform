@@ -3,6 +3,9 @@
 A hackathon prototype for simulated multi-provider liquidity monitoring,
 unusual-activity review, and human operational coordination.
 
+**Architecture overview for judges:** [ARCHITECTURE.md](ARCHITECTURE.md)  
+**Live demo script:** [DEMO_GUIDE.md](DEMO_GUIDE.md)
+
 ## Safety boundary
 
 This project:

@@ -293,6 +293,19 @@ def cached_list_alerts(
         client.close()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_evaluation_dashboard(
+    base_url: str,
+) -> dict[str, Any]:
+    """Fetch controlled benchmark metrics for responsible-AI disclosure."""
+
+    client = BackendClient(base_url=base_url)
+    try:
+        return client.evaluation_dashboard()
+    finally:
+        client.close()
+
+
 # ── Core helpers ──────────────────────────────────────────────────────────────
 
 def localized_text(
