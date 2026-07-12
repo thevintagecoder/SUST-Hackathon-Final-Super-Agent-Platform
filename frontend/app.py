@@ -1,9 +1,10 @@
-"""Streamlit entry point for the Ops Center liquidity desk."""
+"""Streamlit entry point for the field-agent liquidity desk."""
 
 from __future__ import annotations
 
 import os
 import sys
+from html import escape
 from pathlib import Path
 
 # Ensure project root is on sys.path when Streamlit runs this file.
@@ -14,10 +15,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 from frontend.api.client import BackendAPIError, BackendClient
-from frontend.components.common import (
-    SAMPLE_SCENARIO_ID,
-    render_demo_path,
-)
+from frontend.components.common import SAMPLE_SCENARIO_ID
 from frontend.components.scenarios import SCENARIO_REGISTRY
 from frontend.components.styles import apply_app_styles
 from frontend.views.agent_dashboard import render_agent_dashboard
@@ -72,6 +70,8 @@ NAV_ITEMS = [
 
 DEFAULT_PAGE = "Agent desk"
 
+SITE_TITLE = "Super Agent Liquidity and Risk Intelligence Platform"
+
 DB_OPTIONAL_PAGES = {"Model checks"}
 
 
@@ -109,8 +109,21 @@ def get_backend_client(base_url: str) -> BackendClient:
     return BackendClient(base_url=base_url)
 
 
+def _render_site_title() -> None:
+    """Render the platform name above page content."""
+
+    st.markdown(
+        (
+            '<div class="site-title-wrap">'
+            f'<div class="site-title">{escape(SITE_TITLE)}</div>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def _render_bottom_nav() -> None:
-    """Render four-tab Ops Center navigation."""
+    """Render four-tab field-agent navigation."""
 
     current_page = st.session_state.get("current_page", DEFAULT_PAGE)
 
@@ -133,8 +146,8 @@ def _render_bottom_nav() -> None:
 
 
 st.set_page_config(
-    page_title="Ops Center",
-    page_icon="📊",
+    page_title=SITE_TITLE,
+    page_icon="👤",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -161,24 +174,21 @@ if api_ok:
     except BackendAPIError as error:
         connection_error = str(error)
 
-status_left, status_right = st.columns([2, 1])
-with status_left:
-    api_class = "ok" if api_ok else "bad"
-    db_class = "ok" if database_ok else "bad"
-    st.markdown(
-        (
-            '<div class="status-row">'
-            f'<span class="status-pill {api_class}">'
-            f"● API {'online' if api_ok else 'offline'}</span>"
-            f'<span class="status-pill {db_class}">'
-            f"● Data {'ready' if database_ok else 'unavailable'}</span>"
-            "</div>"
-        ),
-        unsafe_allow_html=True,
-    )
-with status_right:
-    render_demo_path()
+api_class = "ok" if api_ok else "bad"
+db_class = "ok" if database_ok else "bad"
+st.markdown(
+    (
+        '<div class="status-row">'
+        f'<span class="status-pill {api_class}">'
+        f"● API {'online' if api_ok else 'offline'}</span>"
+        f'<span class="status-pill {db_class}">'
+        f"● Data {'ready' if database_ok else 'unavailable'}</span>"
+        "</div>"
+    ),
+    unsafe_allow_html=True,
+)
 
+_render_site_title()
 _render_bottom_nav()
 
 with st.container(border=True):

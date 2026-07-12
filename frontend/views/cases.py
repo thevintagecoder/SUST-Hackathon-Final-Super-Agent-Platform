@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from frontend.api.client import BackendClient
-from frontend.components.common import render_demo_path, safety_notice
+from frontend.components.common import safety_notice
 from frontend.views.alerts import render_alerts
 from frontend.views.support_requests import render_support_requests
 
@@ -22,7 +22,6 @@ def render_cases(client: BackendClient) -> None:
         unsafe_allow_html=True,
     )
     safety_notice()
-    render_demo_path()
 
     tab_alerts, tab_support = st.tabs(
         ["Alert inbox", "Support requests"]

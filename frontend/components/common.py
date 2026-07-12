@@ -232,40 +232,6 @@ NETWORK_RECIPES: list[DemoRecipe] = [
     ),
 ]
 
-DEMO_STORY_STEPS = [
-    (
-        "1. Dashboard",
-        "Open **Ops Center** — see active agents, alerts, provider health, "
-        "and investigate AGENT-SYL-001.",
-    ),
-    (
-        "2. Liquidity check",
-        "On **Liquidity**, run Nagad ৳80k cash-in — shows ৳20k float, "
-        "৳60k shortfall. Cash-in uses provider float, not physical cash.",
-    ),
-    (
-        "3. Network support",
-        "Find support — Ambarkhana RECOMMENDED (fresh), Shibgonj "
-        "REQUIRES_CONFIRMATION (stale data despite higher balance).",
-    ),
-    (
-        "4. Runway forecast",
-        "Switch scenario to **FORECAST-001** (reload data), run Nagad "
-        "runway — HIGH risk, ~8 hours to threshold.",
-    ),
-    (
-        "5. Anomalies",
-        "Switch to **REPEATED-001**, run bKash unusual-activity check — "
-        "repeated amounts + velocity, never declares fraud.",
-    ),
-    (
-        "6. Cases",
-        "Create support request for Ambarkhana → Accept → Escalate → "
-        "Resolve with full audit timeline.",
-    ),
-]
-
-
 # ── Caching helpers (1-min TTL to avoid repeated dashboard calls) ─────────────
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -517,19 +483,6 @@ def safety_notice(text: str | None = None) -> None:
         f'<div class="notice">{escape(message)}</div>',
         unsafe_allow_html=True,
     )
-
-
-def render_demo_path() -> None:
-    with st.expander(
-        "▶  What am I looking at? — Demo walkthrough",
-        expanded=False,
-    ):
-        for title, detail in DEMO_STORY_STEPS:
-            st.markdown(f"**{title}** — {detail}")
-        st.caption(
-            "Scenario selector at the top filters alerts and generated checks. "
-            "Balances come from whichever scenario was last loaded into the database."
-        )
 
 
 def render_scenario_context() -> None:

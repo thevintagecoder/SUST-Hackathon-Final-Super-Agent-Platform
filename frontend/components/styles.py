@@ -62,6 +62,20 @@ h1, h2, h3 {
 h1 { font-size: 1.5rem !important; }
 p, li, label, .stMarkdown { color: var(--text); }
 
+/* ── Site title (global entry branding) ─────────────────────── */
+.site-title-wrap {
+    margin: 0.5rem 0 1rem;
+    padding: 0.25rem 0;
+}
+.site-title {
+    color: var(--blue-dark);
+    font-size: 1in;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    text-align: center;
+}
+
 /* ── Ops Center hero header ──────────────────────────────────── */
 .ops-hero {
     background: var(--blue-header);
